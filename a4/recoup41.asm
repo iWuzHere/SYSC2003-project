@@ -80,7 +80,7 @@ delay10Loop:    CPD     #0              ; Perform useless operations to delay.
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
 index           EQU     4
-ledIsOn            EQU     5
+ledIsOn         EQU     5
 
 setLED:
                 PSHX                    ; Store X.
