@@ -128,7 +128,9 @@ const char keypad_characters[] = { '1', '2', '3', 'A',
                                    '7', '8', '9', 'C',
                                    'E', '0', 'F', 'D' };
 
-void (*keypad_handlers[])(void) = {
+typedef void (*keypad_handler_t)(void);
+
+const keypad_handler_t keypad_handlers[] = {
   toggle_ccs,     /* 1 */
   toggle_heat,    /* 2 */
   raise_window,   /* 3 */
