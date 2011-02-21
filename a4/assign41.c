@@ -163,14 +163,14 @@ void keypress(void) {
     byte col, col_mask;
 
     SETMSK(PTM, 0x08); /* Pass through the latch to the keypad. */
-    PTP = 1 << row;    /* Query the current keypad row. */
+    PTP = 0x01 << row; /* Query the current keypad row. */
     CLRMSK(PTM, 0x08); /* Re-enable latching on keypad. */
 
     col_mask = PTH;    /* Copy the polling result. */
 
     /* Test all of the columns in the row. */
     for (col = 0; col < COLS; col++) {
-      if (col_mask & (1 << col)) { /* Check if the given column is set. */
+      if (col_mask & (0x10 << col)) { /* Check if the given column is set. */
         byte table_index = row * ROWS + col;
         void (*key_handler)(void) = keypad_handlers[table_index];
 
