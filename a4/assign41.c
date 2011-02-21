@@ -112,6 +112,7 @@ void emergency(void) {
 
   delay();             /* Delay for ~1 second. */
   CLRMSK(PORTK, 0x10); /* Turn off the buzzer. */
+
   exit(0);
 }
 
@@ -172,7 +173,7 @@ void keypress(void) {
     for (col = 0; col < COLS; col++) {
       if (col_mask & (0x10 << col)) { /* Check if the given column is set. */
         byte table_index = row * ROWS + col;
-        void (*key_handler)(void) = keypad_handlers[table_index];
+        keypad_handler_t key_handler = keypad_handlers[table_index];
 
         /* Execute the key handler, if one is present. */
         if (key_handler != NULL) key_handler();
