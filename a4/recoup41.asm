@@ -105,7 +105,7 @@ init:
 ;       all of the parameters on the stack.
 delay:
         	PSHX				;2 cycles
-		LDY	#15			;2 cycles
+		LDY	#5			;2 cycles
 DLoop:
 		LDX	#$ffff			;2 cycles
 		JSR	D1MS			;4 cycles
