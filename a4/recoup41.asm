@@ -1,6 +1,6 @@
 ; SYSC2003 Recoup 4.1
 ;
-; Brendan MacDonell (100777952) and Imran Iqbal (100xxxxxx)
+; Brendan MacDonell (100777952) and Imran Iqbal (100794182)
 
 #include "DP256reg.asm"
 
@@ -8,6 +8,75 @@
 
 
                 ORG     $4000   ; Code segment.
+                
+                JSR	init
+                ;Turn on all the LEDs
+                LDD	#1
+                PSHD
+                LDD	#0
+                JSR	setLED
+                PULD
+                JSR	delay
+                
+                LDD	#1
+                PSHD
+                LDD	#1
+                JSR	setLED
+                PULD
+                JSR	delay
+                
+                LDD	#1
+                PSHD
+                LDD	#2
+                JSR	setLED
+                PULD
+                JSR	delay
+                
+                LDD	#1
+                PSHD
+                LDD	#3
+                JSR	setLED
+                PULD
+                JSR	delay
+                
+                ;Turn them all off now
+                LDD	#0
+                PSHD
+                LDD	#0
+                JSR	setLED
+                PULD
+                LDD	#0
+                PSHD
+                LDD	#1
+                JSR	setLED
+                PULD
+                LDD	#0
+                PSHD
+                LDD	#2
+                JSR	setLED
+                PULD
+                LDD	#0
+                PSHD
+                LDD	#3
+                JSR	setLED
+                PULD
+                
+                ;Test seven segment Display
+                
+                LDD	#9
+testLoop:
+		PSHD
+		LDY	#1
+		PSHY
+		JSR	set7Segment
+		PULY
+		PULD
+		JSR	delay
+		DBNE	D,testLoop
+		
+		BCLR	PTM, #$08
+		
+		BRA *
 
 ; void init(void)
 ;
@@ -35,42 +104,32 @@ init:
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
 delay:
-                PSHX                    ; Store X.
-                TFR     SP, X           ; Use X as the base pointer.
-                PSHA                    ; Store used registers.
+        	PSHX				;2 cycles
+		LDY	#15			;2 cycles
+DLoop:
+		LDX	#$ffff			;2 cycles
+		JSR	D1MS			;4 cycles
+		DEY				;1 cycle
+		BNE	DLoop			;3 cycles/1 cycle
+	
+		LDX	#$4236			;2 cycles
+		JSR	D1MS			;4 cycles
 
-delayLoop:      LDAA    #100            ; Set the counter to loop 100 times.
-                JSR     delay10ms
-                DBNE    A, delayLoop
+		PSHX				;2 cycles
+		PULX				;2 cycles
 
-                PULA                    ; Restore clobbered registers.
-                LEAS    ,X              ; Point SP to the base of the frame.
-                PULX                    ; Restore X.
-                RTS
-
-; void delay10ms(void)
-;
-; Delay for 10 milliseconds.
-delay10ms:
-                PSHD                    ; Store D so we can use it as a counter.
-                LDD     #10000          ; Set the counter to loop 10000 times.
-
-delay10Loop:    CPD     #0              ; Perform useless operations to delay.
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                CPD     #0
-                NOP
-                DBNE    D, delay10Loop
-
-                PULD                    ; Restore used registers.
-                RTS                     ; Return from the subroutine.
-
+		PULX				;2 cycles
+		RTS				;5 cycles	
+;This delays by 8X + 3, value in X be >= 1
+D1MS:
+		NOP				;1 cycle
+		NOP				;1 cycle
+		NOP				;1 cycle
+		NOP				;1 cycle
+		DEX				;1 cycle
+		BNE	D1MS			;3 cycles/1 cycle
+		RTS				;5 cycles
+	
 ; void setLED(unsigned byte index, boolean on)
 ;
 ; Set the LED, as indicated by an index between 0 and 3 inclusive.
@@ -79,23 +138,25 @@ delay10Loop:    CPD     #0              ; Perform useless operations to delay.
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-index           EQU     4
-ledIsOn         EQU     5
+index           EQU     3
+ledIsOn         EQU     7
 
 setLED:
+		PSHD                    ; Save our arg[0]
                 PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
-                PSHD                    ; Store used registers.
+                
 
                 ; Set up a mask to identify the LED to enable.
                 LDAA    #1              ; Initialize the mask to 1.
-                LDAB    index,SP        ; Load the index into B.
+                LDAB    index,X         ; Load the index into B.
+                INCB			
                 BRA     startLEDShift   ; Jump to the first loop test.
 
 setLEDShift:    LSLA                    ; Shift the LED bit left.
 startLEDShift:  DBNE    B, setLEDShift  ; Loop `index' times.
 
-                TST     ledIsOn,SP      ; Enable (1) or disable(0) the LED?
+                TST     ledIsOn,X       ; Enable (1) or disable(0) the LED?
                 BEQ     disableLED      ; Disable the LED if necessary.
                 ORAA    PortK           ; OR the mask with PortK.
                 BRA     doSetLED        ; Finish the subroutine.
@@ -104,9 +165,10 @@ disableLED:     COMA                    ; Negate the mask.
 
 doSetLED:       STAA    PortK           ; Update Port K.
 
-                PULD                    ; Restore used registers.
+                
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
+                LEAS	2,SP
                 RTS
 
 ; TODO: WTF DOES THE ON PARAMETER DO?
@@ -118,21 +180,23 @@ doSetLED:       STAA    PortK           ; Update Port K.
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-number          EQU     4
-Seg7IsOn        EQU     5
+number          EQU     3
+Seg7IsOn        EQU     7
 
 set7Segment:
-                PSHX                    ; Store X.
+                PSHD                    ; Save arg[0]
+		PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
-                PSHD                    ; Push used registers.
+                
 
-                LDAA    number,SP       ; Load the number.
+                LDAA    number,X        ; Load the number.
                 ANDA    #$0F            ; Mask off any excess bits.
-                BCLR    PTT,#$F0        ; Mask off the BCD value on PTT
+                BCLR    PTT,#$0F        ; Mask off the BCD value on PTT
                 ORAA    PTT             ; OR the Port value with the number.
                 STAA    PTT             ; Store the value back to PTT.
 
-                PULD                    ; Restore used registers.
+                
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
+                LEAS 	2,SP
                 RTS
