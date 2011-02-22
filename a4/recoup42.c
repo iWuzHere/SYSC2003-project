@@ -1,5 +1,10 @@
+/* SYSC2003 Recoup 4.2
+ *
+ * Brendan MacDonell (100777952) and Imran Iqbal (100794182)
+ */
+
+#define NDEBUG
 #include <assert.h>
-#include "recoup42.asm.s"
 
 /* Define an unsigned byte type. */
 typedef unsigned char byte;
