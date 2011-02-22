@@ -64,7 +64,8 @@ D1MS:
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-
+index   = 3
+ledIsOn = 7
 
 _setLED::
 		PSHD                    ; Save our arg[0]
@@ -74,14 +75,14 @@ _setLED::
 
                 ; Set up a mask to identify the LED to enable.
                 LDAA    #1              ; Initialize the mask to 1.
-                LDAB    3,X             ; Load the index into B.
+                LDAB    index,X         ; Load the index into B.
                 INCB			
                 BRA     startLEDShift   ; Jump to the first loop test.
 
 setLEDShift:    LSLA                    ; Shift the LED bit left.
 startLEDShift:  DBNE    B, setLEDShift  ; Loop `index' times.
 
-                TST     7,X             ; Enable (1) or disable(0) the LED?
+                TST     ledIsOn,X       ; Enable (1) or disable(0) the LED?
                 BEQ     disableLED      ; Disable the LED if necessary.
                 ORAA    PORTK           ; OR the mask with PortK.
                 BRA     doSetLED        ; Finish the subroutine.
@@ -93,7 +94,7 @@ doSetLED:       STAA    PORTK           ; Update Port K.
                 
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
-                LEAS	2,SP
+                LEAS	  2,SP
                 RTS
 
 ; TODO: WTF DOES THE ON PARAMETER DO?
@@ -105,7 +106,8 @@ doSetLED:       STAA    PORTK           ; Update Port K.
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-
+number   = 3
+Seg7IsOn = 7
 
 _set7Segment::
                 PSHD                    ; Save arg[0]
@@ -113,7 +115,7 @@ _set7Segment::
                 TFR     SP, X           ; Use X as the base pointer.
                 
 
-                LDAA    3,X        ; Load the number.
+                LDAA    number,X        ; Load the number.
                 ANDA    #$0F            ; Mask off any excess bits.
                 BCLR    PTT,#$0F        ; Mask off the BCD value on PTT
                 ORAA    PTT             ; OR the Port value with the number.
@@ -122,5 +124,5 @@ _set7Segment::
                 
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
-                LEAS 	2,SP
+                LEAS 	  2,SP
                 RTS
