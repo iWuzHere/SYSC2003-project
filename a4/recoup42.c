@@ -1,5 +1,5 @@
 #include <assert.h>
-
+#include "recoup42.asm.s"
 
 /* Define an unsigned byte type. */
 typedef unsigned char byte;
@@ -13,7 +13,8 @@ typedef unsigned char boolean;
 /* Prototypes of assembly language procedures. */
 void init(void);                     /* Initialize Ports and I/O settings. */
 void delay(void);                    /* Delay for one second. */
-void setLED(char index, boolean on); /* Turn LED at 0-based index on or off. */
+void setLED(byte index, boolean on); /* Turn LED at 0-based index on or off. */
+void set7Segment(char number,boolean on);
 
 
 /* Version of signum operating on single-byte integral values. *
