@@ -64,8 +64,7 @@ D1MS:
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-index           EQU     3
-ledIsOn         EQU     7
+
 
 _setLED::
 		PSHD                    ; Save our arg[0]
@@ -75,21 +74,21 @@ _setLED::
 
                 ; Set up a mask to identify the LED to enable.
                 LDAA    #1              ; Initialize the mask to 1.
-                LDAB    index,X         ; Load the index into B.
+                LDAB    3,X             ; Load the index into B.
                 INCB			
                 BRA     startLEDShift   ; Jump to the first loop test.
 
 setLEDShift:    LSLA                    ; Shift the LED bit left.
 startLEDShift:  DBNE    B, setLEDShift  ; Loop `index' times.
 
-                TST     ledIsOn,X       ; Enable (1) or disable(0) the LED?
+                TST     7,X             ; Enable (1) or disable(0) the LED?
                 BEQ     disableLED      ; Disable the LED if necessary.
-                ORAA    PortK           ; OR the mask with PortK.
+                ORAA    PORTK           ; OR the mask with PortK.
                 BRA     doSetLED        ; Finish the subroutine.
 disableLED:     COMA                    ; Negate the mask.
-                ANDA    PortK           ; AND off the index with the mask.
+                ANDA    PORTK           ; AND off the index with the mask.
 
-doSetLED:       STAA    PortK           ; Update Port K.
+doSetLED:       STAA    PORTK           ; Update Port K.
 
                 
                 LEAS    ,X              ; Point SP to the base of the frame.
@@ -106,8 +105,7 @@ doSetLED:       STAA    PortK           ; Update Port K.
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-number          EQU     3
-Seg7IsOn        EQU     7
+
 
 _set7Segment::
                 PSHD                    ; Save arg[0]
@@ -115,7 +113,7 @@ _set7Segment::
                 TFR     SP, X           ; Use X as the base pointer.
                 
 
-                LDAA    number,X        ; Load the number.
+                LDAA    3,X        ; Load the number.
                 ANDA    #$0F            ; Mask off any excess bits.
                 BCLR    PTT,#$0F        ; Mask off the BCD value on PTT
                 ORAA    PTT             ; OR the Port value with the number.

@@ -48,12 +48,13 @@ static void move_elevator(byte start, byte end) {
   --end;
 
   setLED(start, true);               /* Ensure the floor is shown. */
-
+  set7Segment(start+1, true);			 /* Ensure floor number is displayed */
   while (start != end) {
     delay();                         /* Wait ~1 second. */
     setLED(start, false);            /* Disable the last floor. */
     start += direction;              /* Move to the next floor. */
     setLED(start, true);             /* Enable the new indicator. */
+	set7Segment(start+1, true);		 /* Display new floor number */
   }
 
   delay();                           /* Wait ~3 seconds more. */
