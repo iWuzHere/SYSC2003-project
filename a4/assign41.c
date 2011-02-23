@@ -25,6 +25,14 @@ typedef unsigned char boolean;
 /* XXX: WRITE THIS SUBROUTINE IN ASSEMBLY. */
 void delay(void);
 
+int putcharSc0(char);
+
+/* Work around the linker issue which prevents putchar from *
+ * being written in ASM instead of C.                       */
+int putchar(char c) {
+  return putcharSc0(c);
+}
+
 void clearLEDs(void) {
   SETMSK(DDRK, 0x0F);  /* Enable output to the LEDs. */
   CLRMSK(PORTK, 0x0F); /* Disable all of the LEDs. */
