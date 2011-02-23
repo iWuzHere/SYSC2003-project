@@ -1,2 +1,11 @@
 *.s19
 *.SRC
+*.dbg
+*.lk
+*.lst
+*.mak
+*.mp
+BACKUP
+*.lis
+*.o
+*[^aA][^sS][^mM].s
