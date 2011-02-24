@@ -119,6 +119,7 @@ void emergency(void) {
   SETMSK(PORTK, 0x10); /* Turn on the buzzer. */
 
   delay();             /* Delay for ~1 second. */
+
   CLRMSK(PORTK, 0x10); /* Turn off the buzzer. */
 
   exit(0);
@@ -158,9 +159,10 @@ const keypad_handler_t keypad_handlers[] = {
   NULL            /* D */
 };
 
-void keypress(void) {
+byte keypress(void) {
   byte row;
   byte SPI = SPI1CR1;
+  byte table_index = 17; /* Some random value, out of the array's indices. */
 
   /* Ensure that the ports are primed to receive keypresses. */
   SETMSK(DDRP, 0x0F); /* Set row polling bits (PTP0..3) as outputs. */
@@ -180,29 +182,53 @@ void keypress(void) {
     /* Test all of the columns in the row. */
     for (col = 0; col < COLS; col++) {
       if (col_mask & (0x10 << col)) { /* Check if the given column is set. */
-        byte table_index = row * ROWS + col;
-        keypad_handler_t key_handler = keypad_handlers[table_index];
+        table_index = row * ROWS + col;
+		break;
+	   // keypad_handler_t key_handler = keypad_handlers[table_index];
 
         /* Execute the key handler, if one is present. */
-        if (key_handler != NULL) key_handler();
+  //      if (key_handler != NULL) key_handler();
  
         /* XXX: GUARD THIS WITH SPI1CR1 = SPI; putchar(...) ; SPI1CR1 = 0; IF IT FAILS. */       
         /* Additional requirement: Display the character entered. */
-        putchar(keypad_characters[table_index]);
+//        putchar(keypad_characters[table_index]);
       }
     }
+	if( table_index != 17 ){
+		break;
+	}
   }
-
+	
   /* Restore the serial interface. */
   SPI1CR1 = SPI;
+  return table_index; /* In the event that nothing was pressed, the random value will be returned. */
 }
 
+/* Debounces the keypad. */
+/* This makes sure that we dont get 500 presses of the same key in one go. */
+void debounce(void){
+	 byte table_index, check_value;
+	 table_index = keypress();
+	 if( table_index != 17){ /* Make sure we are not working with the random variable. */
+	 	 check_value = table_index;
+	 
+	 	 while( table_index == check_value ){ check_value = keypress(); }
+	 
+     	 /* Execute the key handler, if one is present. */
+     	 if (keypad_handlers[table_index] != NULL) keypad_handlers[table_index]();
+ 
+     	 /* XXX: GUARD THIS WITH SPI1CR1 = SPI; putchar(...) ; SPI1CR1 = 0; IF IT FAILS. */       
+     	 /* Additional requirement: Display the character entered. */
+     	 putchar(keypad_characters[table_index]);
+	}
+	 
+}
 int main(int argc, char **argv) {
   clearLEDs();
 
   /* Query for a keypress until the user kills the program. */
   while(true) {
-    keypress();
+    debounce();
   }
 
   return 0; /* Satisfy the compiler. */
