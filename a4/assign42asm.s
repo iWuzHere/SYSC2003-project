@@ -35,7 +35,7 @@ D1MS:
 		RTS				;5 cycles
 		
 ; Generate a 50 ms delay
-_DELAY50M::
+DELAY50M:
           pshx
           ldx  #49998      ; delay 50,000 usecs,
           jsr  D1MS     ; call usec delay
@@ -45,7 +45,7 @@ _DELAY50M::
 ;
 
 ; Generate a 10 ms delay
-_DELAY10M::                            ; jsr=4cyles
+DELAY10M:                            ; jsr=4cyles
           pshx             ; 2 cycles ,save x
           ldx  #9998       ; 2 cycles,delay 9998 usec + 2 for this routine
           jsr  D1MS     ; call usec delay, this delay offset in sub
@@ -54,7 +54,7 @@ _DELAY10M::                            ; jsr=4cyles
 ;
 ;
 ; Generate a 1 ms delay
-_DELAY1MS::
+DELAY1MS:
                            ; jsr=4cyles
           pshx             ; 2 cycles ,save x
           ldx  #998       ; 2 cycles,delay 9998 usec + 2 for this routine
@@ -73,7 +73,7 @@ LSLStart:
 			 tsta
 			 beq LSLEnd
 			 jsr LCD2PP_Data
-			 jsr _DELAY50M
+			 jsr DELAY50M
 			 inx
 			 bra LSLStart
 LSLEnd:
@@ -86,7 +86,7 @@ _moveLCDCursor::
 			PSHX
 			TBA
 			jsr LD2PP_Instruction
-			jsr _DELAY50M
+			jsr DELAY50M
 			PULX
 			RTS
 
@@ -115,26 +115,26 @@ _LCD2PP_Init::	; Note : Use 4-bit init sequence (not 8-bit)  Page 3 LCD_spec.pdf
 
           bclr    PTT,#$0E  ; select lcd commands Cs=0 En=0
 
-          jsr      _DELAY50M
+          jsr      DELAY50M
           ldaa     #$02		; Set to 4-bit operation (0010)
           jsr      LCD2PP_4     ; This first instruction is only 4 bits long!!!  Rest are 8 bits.  
-          jsr      _DELAY50M
+          jsr      DELAY50M
 
           ldaa     #$2c		; Function Set = 001(D/L)NF** where D/L = 0(4-bit) N=1(2-lines) F=0(font=5x7 dots)
           jsr      LD2PP_Instruction         
-          jsr      _DELAY10M         
+          jsr      DELAY10M         
 
           ldaa      #$0e	; Display On/off Control = 00001DCB where D=1(display on) C=1(cursor on) B=0 (blink off)
           jsr      LD2PP_Instruction          
-          jsr      _DELAY10M          
+          jsr      DELAY10M          
                 
           ldaa     #$01		; Clear display = 00000001
           jsr      LD2PP_Instruction           
-          jsr      _DELAY10M
-		  jsr	   _DELAY10M          
+          jsr      DELAY10M
+		  jsr	   DELAY10M          
           ldaa     #$80		; DDRAM Address Set = 01xxxxxx where xxxxxx = address
           jsr      LD2PP_Instruction
-          jsr      _DELAY10M        
+          jsr      DELAY10M        
 
 ; Reset Lcd states to rest
          bclr    PTT,#$0E ; turn all signals off on lcd
@@ -160,7 +160,7 @@ LD2PP_Instruction:
 
 LCD2PP_4:			; Destroys a and b
 	 bset  	PTS,#$80	; set U21_EN high so that latch becomes transparent
-         jsr      _DELAY1MS      ; delay     
+         jsr      DELAY1MS      ; delay     
          ldab     PTP              ; Port P
          andb     #$f0             ; get only bits 4 - 7
          anda     #$0f             ; get data
@@ -168,11 +168,11 @@ LCD2PP_4:			; Destroys a and b
          staa     PTP              ; save data 
 	; For LCD's write cycle, Enable must pulse high and then low (for specified time)
          bclr     PTT,#$08       ; enable low
-         jsr      _DELAY1MS         ; delay for LCD
+         jsr      DELAY1MS         ; delay for LCD
          bset     PTT,#$08       ; latch data
-         jsr      _DELAY1MS         ; delay for LCD 
+         jsr      DELAY1MS         ; delay for LCD 
          bclr     PTT,#$08           ; enable low
-         jsr      _DELAY1MS
+         jsr      DELAY1MS
 	 bclr  PTS,#$80    ; set U21_EN low to isolate LCD from parallel control (outputs are latched)
          rts
 ;

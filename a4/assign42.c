@@ -21,9 +21,9 @@ typedef unsigned char boolean;
 #define YELLOW_LED 0x04
 #define GREEN_LED  0x08
 
-#define CCS_ADDRESS	   0x0C
+#define CCS_ADDRESS	   0x8C
 #define HEATER_ADDRESS 0XC2
-#define SPEED_ADDRESS  0x05
+#define SPEED_ADDRESS  0x85
 #define TEMP_ADDRESS   0xCC
 
 /* XXX: WRITE THIS SUBROUTINE IN ASSEMBLY. */
@@ -34,7 +34,7 @@ void moveLCDCursor(byte address);
 void LoadStrLCD( char *s );
 
 /*Global Variables*/
-int rpm = 0;
+int rpm = 100;
 int speed = 0;
 boolean ccs_enabled = false;
 int ccs_rpm = 0;
@@ -47,6 +47,7 @@ LCDs DDRAM
 
  01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
  S  P  E  E  D  X  X  X     C  C  S  O  F  F
+ 
  H  :  O  F  F                 T  :  X  X  C
  C1 C2 C3 C4 C5 C6 C7 C8 C9 CA CB CC CD CE CF
 
@@ -58,30 +59,30 @@ char str1[] = "SPEED    CCS   \0";
 char str2[] = "H:        T:  C\0";
 /** LCD STUFF ******************************************************/
 void setupLCD(void){
+	 byte backup = PTT;
 	 LCD2PP_Init();
 	 LoadStrLCD( str1 );
 	 moveLCDCursor( 0xC0 );
 	 LoadStrLCD( str2 );
+	 PTT = backup;
 }
 
 //Rough int to ascii function
 void int_to_ascii(int num, char *s, int strlen){
-	 s[--strlen] = '\0'; /* Null terminate our string */
+	 s[--strlen] = '\0';
 	 strlen--;
-	 for(; strlen >=0; strlen--){
-	 	   int r = num % 10;
-	 	   num /= 10;
-		   if(num){
-	 	   	 s[strlen] = (num + 0x30);
-		   }
-		   else{
-		     s[strlen] = 0x20;
-		   }
+	 for( ; strlen >= 0; strlen-- ){
+	 	 int r = num % 10;
+		 if( num ) s[strlen] = (r + 0x30);
+		 else s[strlen] = 0x20;
+		 num /= 10;
 	 }
 }
 void updateLCD(byte address, char *s){
+	 byte backup = PTT;
 	 moveLCDCursor( address );
-	 LoadStrLCD( s ); 
+	 LoadStrLCD( s );
+	 PTT = backup; 
 }
 void setOnOff(boolean bool, byte address){
 	 if(bool){
@@ -115,6 +116,13 @@ void updateSpeed(void){
   int_to_ascii(speed, spd, 4);
   updateLCD(SPEED_ADDRESS, spd);
   
+}
+
+void setLCDVariables(void){
+	 updateSpeed();
+	 updateTemp();
+	 setOnOff( ccs_enabled, CCS_ADDRESS );
+	 setOnOff( heat_enabled, HEATER_ADDRESS );
 }
 void clearLEDs(void) {
   SETMSK(DDRK, 0x0F);  /* Enable output to the LEDs. */
@@ -304,6 +312,7 @@ void debounce(void){
 int main(int argc, char **argv) {
   clearLEDs();
   setupLCD();
+  setLCDVariables();
   /* Query for a keypress until the user kills the program. */
   while(true) {
     debounce();
