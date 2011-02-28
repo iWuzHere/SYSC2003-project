@@ -115,12 +115,12 @@ void lower_window(void) {
 
 /** MISC CONTROL ******************************************************/
 void emergency(void) {
-  SETMSK(DDRK, 0x10);  /* Enable output to the buzzer. */
-  SETMSK(PORTK, 0x10); /* Turn on the buzzer. */
+  SETMSK(DDRK, 0x20);  /* Enable output to the buzzer. */
+  SETMSK(PORTK, 0x20); /* Turn on the buzzer. */
 
   delay();             /* Delay for ~1 second. */
 
-  CLRMSK(PORTK, 0x10); /* Turn off the buzzer. */
+  CLRMSK(PORTK, 0x20); /* Turn off the buzzer. */
 
   exit(0);
 }
