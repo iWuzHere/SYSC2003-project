@@ -22,14 +22,16 @@ typedef unsigned char boolean;
 #define GREEN_LED  0x08
 
 #define CCS_ADDRESS	   0x8C
-#define HEATER_ADDRESS 0XC2
+#define HEATER_ADDRESS 0xC2
 #define SPEED_ADDRESS  0x85
 #define TEMP_ADDRESS   0xCC
 
 /* XXX: WRITE THIS SUBROUTINE IN ASSEMBLY. */
 void delay(void);
 void LCD2PP_Init(void);
+
 /* Changes the spot you are writing to */
+void updateLCD(byte address, char *s);
 void moveLCDCursor(byte address);
 void LoadStrLCD( char *s );
 
@@ -55,15 +57,18 @@ addresses that need to be changed: 0x06, 0x07, 0x08, 0x0D, 0x0E, 0x0F
 				 : 0xC3, 0xC4, 0xC5, 0xCD, 0xCE
 
 */
-char str1[] = "SPEED    CCS   \0";
-char str2[] = "H:        T:  C\0";
+char lcd_line_1[] = "SPEED    CCS   ";
+char lcd_line_2[] = "H:        T:  C";
+
 /** LCD STUFF ******************************************************/
 void setupLCD(void){
 	 byte backup = PTT;
 	 LCD2PP_Init();
-	 LoadStrLCD( str1 );
-	 moveLCDCursor( 0xC0 );
-	 LoadStrLCD( str2 );
+
+	 LoadStrLCD(lcd_line_1);
+	 moveLCDCursor(0xC0);
+	 LoadStrLCD(lcd_line_2);
+	 
 	 PTT = backup;
 }
 
@@ -73,23 +78,24 @@ void int_to_ascii(int num, char *s, int strlen){
 	 strlen--;
 	 for( ; strlen >= 0; strlen-- ){
 	 	 int r = num % 10;
-		 if( num ) s[strlen] = (r + 0x30);
-		 else s[strlen] = 0x20;
+		 
+		 if (num) s[strlen] = r + '0';
+		 else     s[strlen] = ' ';
+		 
 		 num /= 10;
 	 }
 }
-void updateLCD(byte address, char *s){
+
+void updateLCD(byte address, char *s) {
 	 byte backup = PTT;
-	 moveLCDCursor( address );
-	 LoadStrLCD( s );
+	 moveLCDCursor(address);
+	 LoadStrLCD(s);
 	 PTT = backup; 
 }
+
 void setOnOff(boolean bool, byte address){
-	 if(bool){
-		updateLCD(address, " ON\0" );
-	 }else{
-	 	updateLCD(address, "OFF\0" );
-	 } 	
+	 if (bool) updateLCD(address, " ON");
+	 else      updateLCD(address, "OFF");
 }
 
 void updateTemp(void){
@@ -97,6 +103,7 @@ void updateTemp(void){
   int_to_ascii(temperature, tmp, 3);
   updateLCD(TEMP_ADDRESS, tmp);
 }
+
 /* Rough function to calculate speed ripped from assignment 3; Replace with your own if you need to*/
 boolean calc_speed(int RPM, int wheelR, int *speed ){
 	 *speed = RPM * wheelR * 2 * 3.14 * 60/1000;
@@ -108,22 +115,20 @@ boolean calc_speed(int RPM, int wheelR, int *speed ){
 
 void updateSpeed(void){
   char spd[4];
-  if( ccs_enabled ){
-  	 calc_speed(ccs_rpm, 1, &speed);
-  }else{
-     calc_speed(rpm, 1, &speed);
-  }
+  if (ccs_enabled) calc_speed(ccs_rpm, 1, &speed);
+  else             calc_speed(rpm, 1, &speed);
+
   int_to_ascii(speed, spd, 4);
   updateLCD(SPEED_ADDRESS, spd);
-  
 }
 
 void setLCDVariables(void){
 	 updateSpeed();
 	 updateTemp();
-	 setOnOff( ccs_enabled, CCS_ADDRESS );
-	 setOnOff( heat_enabled, HEATER_ADDRESS );
+	 setOnOff(ccs_enabled, CCS_ADDRESS);
+	 setOnOff(heat_enabled, HEATER_ADDRESS);
 }
+
 void clearLEDs(void) {
   SETMSK(DDRK, 0x0F);  /* Enable output to the LEDs. */
   CLRMSK(PORTK, 0x0F); /* Disable all of the LEDs. */
@@ -156,7 +161,7 @@ void set_ccs(boolean enabled) {
   ccs_enabled = enabled;      /* Update the CCS condition. */
   setLED(GREEN_LED, enabled); /* Update the green LED. */
   ccs_rpm = rpm;
-  setOnOff( enabled, CCS_ADDRESS );
+  setOnOff(enabled, CCS_ADDRESS);
 }
 
 void toggle_ccs(void) {
@@ -182,7 +187,7 @@ void disable_ccs(void) {
 void toggle_heat(void) {
   heat_enabled = !heat_enabled;  /* Toggle the heating condition */
   setLED(RED_LED, heat_enabled); /* Update the red LED. */
-  setOnOff( heat_enabled, HEATER_ADDRESS );
+  setOnOff(heat_enabled, HEATER_ADDRESS);
 }
 
 void increase_heat(void) {
@@ -254,10 +259,13 @@ const keypad_handler_t keypad_handlers[] = {
   NULL            /* D */
 };
 
-byte keypress(void) {
+/* Track keys pressed after each iteration, so we don't produce multiple *
+ * actions for a single keypress. Initialized to all be false.           */
+boolean key_was_pressed[sizeof(keypad_handlers) / sizeof(keypad_handler_t)] = { false };
+
+void keypress(void) {
   byte row;
   byte SPI = SPI1CR1;
-  byte table_index = 17; /* Some random value, out of the array's indices. */
 
   /* Ensure that the ports are primed to receive keypresses. */
   SETMSK(DDRP, 0x0F); /* Set row polling bits (PTP0..3) as outputs. */
@@ -276,36 +284,26 @@ byte keypress(void) {
 
     /* Test all of the columns in the row. */
     for (col = 0; col < COLS; col++) {
-      if (col_mask & (0x10 << col)) { /* Check if the given column is set. */
-        table_index = row * ROWS + col;
-		break;
+      byte table_index = row * ROWS + col;
+      boolean is_pressed = col_mask & (0x10 << col);
+	  
+      /* Check if the given column is _newly_ set. */
+      if (is_pressed && !key_was_pressed[table_index]) {
+        keypad_handler_t key_handler = keypad_handlers[table_index];
+
+        /* Additional requirement: Display the character entered. */
+        putchar(keypad_characters[table_index]);
+		
+        /* Execute the key handler, if one is present. */
+        if (key_handler != NULL) key_handler();
       }
+
+      key_was_pressed[table_index] = is_pressed;
     }
-	if( table_index != 17 ){
-		break;
-	}
   }
 	
   /* Restore the serial interface. */
   SPI1CR1 = SPI;
-  return table_index; /* In the event that nothing was pressed, the random value will be returned. */
-}
-
-/* Debounces the keypad. */
-/* This makes sure that we dont get 500 presses of the same key in one go. */
-void debounce(void){
-	 byte table_index, check_value;
-	 table_index = keypress();
-	 if( table_index != 17){ /* Make sure we are not working with the random variable. */
-	 	 check_value = table_index;
-	 
-	 	 while( table_index == check_value ){ check_value = keypress(); }
-	 
-     	 /* Execute the key handler, if one is present. */
-     	 if (keypad_handlers[table_index] != NULL) keypad_handlers[table_index]();
-
-	}
-	 
 }
 
 
@@ -313,9 +311,10 @@ int main(int argc, char **argv) {
   clearLEDs();
   setupLCD();
   setLCDVariables();
+  
   /* Query for a keypress until the user kills the program. */
   while(true) {
-    debounce();
+    keypress();
   }
 
   return 0; /* Satisfy the compiler. */
