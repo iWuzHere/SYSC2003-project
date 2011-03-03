@@ -21,6 +21,9 @@ typedef unsigned char boolean;
 #define YELLOW_LED 0x04
 #define GREEN_LED  0x08
 
+#define LCD_LINE_1 	   0x80
+#define LCD_LINE_2 	   0xC0
+
 #define CCS_ADDRESS	   0x8C
 #define HEATER_ADDRESS 0xC2
 #define SPEED_ADDRESS  0x85
@@ -31,6 +34,7 @@ void delay(void);
 void LCD2PP_Init(void);
 
 /* Changes the spot you are writing to */
+void clearLCD(void);
 void updateLCD(byte address, char *s);
 void moveLCDCursor(byte address);
 void LoadStrLCD( char *s );
@@ -215,6 +219,9 @@ void lower_window(void) {
 
 /** MISC CONTROL ******************************************************/
 void emergency(void) {
+  clearLCD();
+  updateLCD(LCD_LINE_1, "Emergency stop");
+  
   SETMSK(DDRK, 0x20);  /* Enable output to the buzzer. */
   SETMSK(PORTK, 0x20); /* Turn on the buzzer. */
 

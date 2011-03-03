@@ -86,8 +86,17 @@ _moveLCDCursor::
 			PSHX
 			TBA
 			jsr LD2PP_Instruction
-			jsr DELAY50M
+			jsr DELAY10M
 			PULX
+			RTS
+
+; void clearLCD(void)
+; Clears the LCD.
+_clearLCD::	
+			ldaa     #$01		; Clear display = 00000001
+			jsr      LD2PP_Instruction           
+			jsr      DELAY10M
+			jsr	   	 DELAY10M
 			RTS
 
 ; void LCD2PP_Init( void )
@@ -99,7 +108,6 @@ _LCD2PP_Init::	; Note : Use 4-bit init sequence (not 8-bit)  Page 3 LCD_spec.pdf
 		;	First instruction involves only a 4-bit instruction (one WRITE)
 		;	Following instructions involve 8 bit instruction, therefore
 		;		2 * 4-bit writes
-
 	; "System init"
 	; Setup Port T for output
           movb #$CF,DDRT        ; setup port T
@@ -131,7 +139,8 @@ _LCD2PP_Init::	; Note : Use 4-bit init sequence (not 8-bit)  Page 3 LCD_spec.pdf
           ldaa     #$01		; Clear display = 00000001
           jsr      LD2PP_Instruction           
           jsr      DELAY10M
-		  jsr	   DELAY10M          
+		  jsr	   DELAY10M 
+		           
           ldaa     #$80		; DDRAM Address Set = 01xxxxxx where xxxxxx = address
           jsr      LD2PP_Instruction
           jsr      DELAY10M        
