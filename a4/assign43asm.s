@@ -34,12 +34,8 @@ D1MS:
 		BNE	D1MS			;3 cycles/1 cycle
 		RTS				;5 cycles
 
-_DELAY50M::
-		   PSHX
-		   JSR 			DELAY50M
-		   PULX
-	
 ; Generate a 50 ms delay
+_DELAY50M::
 DELAY50M:
           pshx
           ldx  #49998      ; delay 50,000 usecs,
@@ -50,6 +46,7 @@ DELAY50M:
 ;
 
 ; Generate a 10 ms delay
+_delay10ms::
 DELAY10M:                            ; jsr=4cyles
           pshx             ; 2 cycles ,save x
           ldx  #9998       ; 2 cycles,delay 9998 usec + 2 for this routine
@@ -66,6 +63,11 @@ DELAY1MS:
           jsr  D1MS       ; call usec delay, this delay offset in sub
           pulx             ; 3 cycles restore x
           rts              ; 5 cycles
+		  
+DELAY2MS:
+		 JSR  DELAY1MS
+		 JSR  DELAY1MS
+		 RTS
 		  
 ; void LoadStrLCD( char *s )
 ; Loads characters into the LCD until it hits a null terminate
