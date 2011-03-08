@@ -74,6 +74,12 @@ testLoop:
 		JSR	delay
 		DBNE	D,testLoop
 		
+		; Clear the 7 seg display
+		LDY	#0
+		PSHY
+		JSR	set7Segment
+		PULY
+		
 		BCLR	PTM, #$08
 		
 		BRA *
@@ -146,7 +152,6 @@ setLED:
                 PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
                 
-
                 ; Set up a mask to identify the LED to enable.
                 LDAA    #1              ; Initialize the mask to 1.
                 LDAB    index,X         ; Load the index into B.
@@ -188,14 +193,18 @@ set7Segment:
 		PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
                 
-
+                TST     Seg7IsOn,X      ; Enable (1) or disable(0) the 7-segment display.
+		BNE	Continue7Seg    ; Skip clearing if the 7-seg is on.
+		MOVB	#$0F, PTT	; Set the BCD value to be invalid (turn it off.)
+		BRA	Done7Seg	; End the routine.
+Continue7Seg:		
                 LDAA    number,X        ; Load the number.
                 ANDA    #$0F            ; Mask off any excess bits.
                 BCLR    PTT,#$0F        ; Mask off the BCD value on PTT
                 ORAA    PTT             ; OR the Port value with the number.
                 STAA    PTT             ; Store the value back to PTT.
 
-                
+Done7Seg:               
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
                 LEAS 	2,SP
