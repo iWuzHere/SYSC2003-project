@@ -1,3 +1,4 @@
+//Brendan MacDonell (100777952) And Imran Iqbal (100794182)
 #include <stdlib.h>
 #include <stdio.h>
 #include "hcs12dp256.h"
