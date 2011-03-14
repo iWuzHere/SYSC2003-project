@@ -33,7 +33,7 @@ _delay::
         PSHX				;2 cycles
 		TFR	D, Y
 DLoop:
-		LDX	#$ffff			;2 cycles
+		LDX	#$7fff			;2 cycles
 		JSR	D1MS			;4 cycles
 		DEY				;1 cycle
 		BNE	DLoop			;3 cycles/1 cycle
