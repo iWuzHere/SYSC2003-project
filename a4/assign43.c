@@ -269,10 +269,10 @@ const keypad_handler_t keypad_handlers[] = {
 
 #pragma interrupt_handler KISR()
 void KISR(void) {
-  byte row;
+  byte row, backup = PIEH;
   byte SPI = SPI1CR1;
-  
-  asm("swi");
+  printf("you into the interrupt\n");
+  PIEH = 0x00; //local disable
 
   /* Ensure that the ports are primed to receive keypresses. */
   SETMSK(DDRP, 0x0F); /* Set row polling bits (PTP0..3) as outputs. */
@@ -310,21 +310,25 @@ void KISR(void) {
   /* Restore the serial interface. */
   SPI1CR1 = SPI;
   
+  SETMSK(PIEH,0xF0);//Prof's code
+  PIFH = PIFH;// Apparently this does something, according to prof code and hc12 manual
+  
+  
   // Deal with the lack of key up events on this board.
   DELAY50M();
   DELAY50M();
   DELAY50M();
+  //do we require a asm("rti") here?
 }
 
 int main(int argc, char **argv) {
   clearLEDs();
   setupLCD();
   setLCDVariables();
-  
+
   PIFH = 0xFF; // Clear previous interrupt flags
-  PPSH = 0xF0; // Rising Edge
-  PERH = 0x00; // Disable pulldowns
-  PIEH |= 0xF0; // Local enable on columns inputs
+  
+  PIEH |= 0xFF; // Local enable on columns inputs
   asm("cli");
   
   /* Query for a keypress until the user kills the program. */

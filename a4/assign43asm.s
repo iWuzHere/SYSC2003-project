@@ -35,10 +35,6 @@ D1MS:
 		RTS				;5 cycles
 
 _DELAY50M::
-		   PSHX
-		   JSR 			DELAY50M
-		   PULX
-	
 ; Generate a 50 ms delay
 DELAY50M:
           pshx

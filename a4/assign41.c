@@ -1,3 +1,7 @@
+/* SYSC2003 Assignment 4.1
+ *
+ * Brendan MacDonell (100777952) and Imran Iqbal (100794182)
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include "hcs12dp256.h"
