@@ -1,88 +1,8 @@
-; SYSC2003 Recoup 4.1
+; SYSC2003 Recoup 4.2
 ;
 ; Brendan MacDonell (100777952) and Imran Iqbal (100794182)
 
-#include "DP256reg.asm"
-
-                ORG     $1000   ; Data segment.
-
-
-                ORG     $4000   ; Code segment.
-                
-                JSR	init
-                ;Turn on all the LEDs
-                LDD	#1
-                PSHD
-                LDD	#0
-                JSR	setLED
-                PULD
-                JSR	delay
-                
-                LDD	#1
-                PSHD
-                LDD	#1
-                JSR	setLED
-                PULD
-                JSR	delay
-                
-                LDD	#1
-                PSHD
-                LDD	#2
-                JSR	setLED
-                PULD
-                JSR	delay
-                
-                LDD	#1
-                PSHD
-                LDD	#3
-                JSR	setLED
-                PULD
-                JSR	delay
-                
-                ;Turn them all off now
-                LDD	#0
-                PSHD
-                LDD	#0
-                JSR	setLED
-                PULD
-                LDD	#0
-                PSHD
-                LDD	#1
-                JSR	setLED
-                PULD
-                LDD	#0
-                PSHD
-                LDD	#2
-                JSR	setLED
-                PULD
-                LDD	#0
-                PSHD
-                LDD	#3
-                JSR	setLED
-                PULD
-                
-                ;Test seven segment Display
-                
-                LDD	#9
-testLoop:
-		PSHD
-		LDY	#1
-		PSHY
-		JSR	set7Segment
-		PULY
-		PULD
-		JSR	delay
-		DBNE	D,testLoop
-		
-		; Clear the 7 seg display
-		LDY	#0
-		PSHY
-		JSR	set7Segment
-		PULY
-		
-		BCLR	PTM, #$08
-		
-		BRA *
+.include "DP256reg.s"
 
 ; void init(void)
 ;
@@ -91,7 +11,7 @@ testLoop:
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-init:
+_init::
                 PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
 
@@ -109,11 +29,11 @@ init:
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-delay:
-        	PSHX				;2 cycles
-		LDY	#5			;2 cycles
+_delay::
+        PSHX				;2 cycles
+		TFR	D, Y
 DLoop:
-		LDX	#$ffff			;2 cycles
+		LDX	#$7fff			;2 cycles
 		JSR	D1MS			;4 cycles
 		DEY				;1 cycle
 		BNE	DLoop			;3 cycles/1 cycle
@@ -144,14 +64,15 @@ D1MS:
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-index           EQU     3
-ledIsOn         EQU     7
+index   = 3
+ledIsOn = 7
 
-setLED:
+_setLED::
 		PSHD                    ; Save our arg[0]
                 PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
                 
+
                 ; Set up a mask to identify the LED to enable.
                 LDAA    #1              ; Initialize the mask to 1.
                 LDAB    index,X         ; Load the index into B.
@@ -163,17 +84,17 @@ startLEDShift:  DBNE    B, setLEDShift  ; Loop `index' times.
 
                 TST     ledIsOn,X       ; Enable (1) or disable(0) the LED?
                 BEQ     disableLED      ; Disable the LED if necessary.
-                ORAA    PortK           ; OR the mask with PortK.
+                ORAA    PORTK           ; OR the mask with PortK.
                 BRA     doSetLED        ; Finish the subroutine.
 disableLED:     COMA                    ; Negate the mask.
-                ANDA    PortK           ; AND off the index with the mask.
+                ANDA    PORTK           ; AND off the index with the mask.
 
-doSetLED:       STAA    PortK           ; Update Port K.
+doSetLED:       STAA    PORTK           ; Update Port K.
 
                 
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
-                LEAS	2,SP
+                LEAS	  2,SP
                 RTS
 
 ; TODO: WTF DOES THE ON PARAMETER DO?
@@ -185,27 +106,23 @@ doSetLED:       STAA    PortK           ; Update Port K.
 ;
 ; NOTE: This subroutine uses C-style calling conventions. Pass
 ;       all of the parameters on the stack.
-number          EQU     3
-Seg7IsOn        EQU     7
+number   = 3
+Seg7IsOn = 7
 
-set7Segment:
+_set7Segment::
                 PSHD                    ; Save arg[0]
 		PSHX                    ; Store X.
                 TFR     SP, X           ; Use X as the base pointer.
                 
-                TST     Seg7IsOn,X      ; Enable (1) or disable(0) the 7-segment display.
-		BNE	Continue7Seg    ; Skip clearing if the 7-seg is on.
-		MOVB	#$0F, PTT	; Set the BCD value to be invalid (turn it off.)
-		BRA	Done7Seg	; End the routine.
-Continue7Seg:		
+
                 LDAA    number,X        ; Load the number.
                 ANDA    #$0F            ; Mask off any excess bits.
                 BCLR    PTT,#$0F        ; Mask off the BCD value on PTT
                 ORAA    PTT             ; OR the Port value with the number.
                 STAA    PTT             ; Store the value back to PTT.
 
-Done7Seg:               
+                
                 LEAS    ,X              ; Point SP to the base of the frame.
                 PULX                    ; Restore X.
-                LEAS 	2,SP
+                LEAS 	  2,SP
                 RTS

@@ -84,6 +84,9 @@ void setupLCD(void){
 void int_to_ascii(int num, char *s, int strlen){
 	 s[--strlen] = '\0';
 	 strlen--;
+	 if( num == 0 ){
+	 	 s[strlen--] = '0';
+	 }
 	 for( ; strlen >= 0; strlen-- ){
 	 	 int r = num % 10;
 		 
@@ -158,6 +161,7 @@ void accelerate(void) {
 }
 
 void brake(void) {
+  if( rpm == 0 ) { return; }
   rpm--;
   updateSpeed();
 }
@@ -182,6 +186,7 @@ void increase_ccs(void) {
 }
 
 void decrease_ccs(void) {
+  if( ccs_rpm == 0 ){ return; }
   ccs_rpm--;
   updateSpeed();
 }
@@ -199,11 +204,13 @@ void toggle_heat(void) {
 }
 
 void increase_heat(void) {
+  if( temperature == 99 ){ return; }
   temperature++;
   updateTemp();
 }
 
 void decrease_heat(void) {
+  if( temperature == 0 ) { return; }
   temperature--;
   updateTemp();
 }
