@@ -1,5 +1,3 @@
-; Brendan MacDonell (100777952) And Imran Iqbal (100794182)
-
         .include "DP256Reg.s"
 		.area text
 
@@ -35,7 +33,7 @@ D1MS:
 		DEX				;1 cycle
 		BNE	D1MS			;3 cycles/1 cycle
 		RTS				;5 cycles
-		
+
 ; Generate a 50 ms delay
 DELAY50M:
           pshx
@@ -75,7 +73,7 @@ LSLStart:
 			 tsta
 			 beq LSLEnd
 			 jsr LCD2PP_Data
-			 jsr DELAY50M
+			 jsr DELAY1MS
 			 inx
 			 bra LSLStart
 LSLEnd:

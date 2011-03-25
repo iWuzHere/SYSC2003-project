@@ -1,4 +1,4 @@
-; SYSC2003 Recoup 4.2
+; SYSC2003 Recoup 5.1
 ;
 ; Brendan MacDonell (100777952) and Imran Iqbal (100794182)
 
@@ -31,11 +31,13 @@ _init::
 ;       all of the parameters on the stack.
 _delay::
         PSHX				;2 cycles
-		TFR	D, Y
+		TFR     SP, X       ; Use X as the base pointer.
+		PSHD
+		TFR	D, Y            ; Transfer counter to Y.
 DLoop:
 		LDX	#$7fff			;2 cycles
 		JSR	D1MS			;4 cycles
-		DEY				;1 cycle
+		DEY				    ;1 cycle
 		BNE	DLoop			;3 cycles/1 cycle
 	
 		LDX	#$4236			;2 cycles
@@ -43,9 +45,10 @@ DLoop:
 
 		PSHX				;2 cycles
 		PULX				;2 cycles
-
+		
+        PULD
 		PULX				;2 cycles
-		RTS				;5 cycles	
+		RTS				    ;5 cycles	
 ;This delays by 8X + 3, value in X be >= 1
 D1MS:
 		NOP				;1 cycle

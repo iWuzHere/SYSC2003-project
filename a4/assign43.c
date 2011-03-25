@@ -287,6 +287,8 @@ void KISR(void) {
   byte row, col, col_mask = PIFH; // Save the column pressed.
   byte SPI = SPI1CR1;
   
+
+
   /* Ensure that the ports are primed to receive keypresses. */
   SETMSK(DDRP, 0x0F); /* Set row polling bits (PTP0..3) as outputs. */
   CLRMSK(DDRH, 0xF0); /* Set column bits (PTH4..7) as inputs. */
@@ -340,6 +342,12 @@ int main(int argc, char **argv) {
   setupLCD();
   setLCDVariables();
     
+
+
+
+
+
+
   /* Query for a keypress until the user kills the program. */
   while(true) ;
 

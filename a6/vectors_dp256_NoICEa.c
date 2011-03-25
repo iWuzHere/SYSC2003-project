@@ -19,7 +19,8 @@
  */
 #pragma nonpaged_function _start
 extern void _start(void);	/* entry point in crt??.s */
-
+extern void RTI(void);
+extern void clock(void);
 #define NOICE_DUMMY_ENTRY (void (*)(void))0xF8CF
 #define NOICE_XIRQ	(void (*)(void))0xF8C7
 #define NOICE_SWI	(void (*)(void))0xF8C3
@@ -92,8 +93,8 @@ void (*interrupt_vectors[])(void) =
 	NOICE_DUMMY_ENTRY, /*Timer Channel 3*/
 	NOICE_DUMMY_ENTRY, /*Timer Channel 2*/
 	NOICE_DUMMY_ENTRY, /*Timer Channel 1*/
-	NOICE_DUMMY_ENTRY, /*Timer Channel 0*/
-	NOICE_DUMMY_ENTRY, /*Real Time Interrupt*/
+	clock, /*Timer Channel 0*/
+	RTI, /*Real Time Interrupt*/
 	NOICE_DUMMY_ENTRY, /*IRQ*/
 	NOICE_XIRQ, /*XIRQ*/
 	NOICE_SWI, /*SWI*/
