@@ -257,7 +257,7 @@ void RTI(void) {
 int uptime_seconds = 0;
 int paca_intrs = 0;
 
-#define MAX_RPS 200
+#define MAX_RPS 30
 #pragma interrupt_handler clock
 void clock(void) {
   static unsigned int ticks = 0;
@@ -267,8 +267,8 @@ void clock(void) {
 	
 	rps = PACNT;
     PACNT = 0;
-	
-    if (rps > MAX_RPS) (PWMDTY7)--;
+	//Stops the motor from slowing down too fast
+    if (uptime_seconds % 4 == 0 && rps > MAX_RPS) (PWMDTY7)--;
   }
   
   TC0 += TC0_TICK_LENGTH; // Prepare for a new tick.
@@ -419,9 +419,9 @@ void init(void) {
   clearLEDs();
   LCD2PP_Init();
   	
-  SETMSK(DDRT, 0x70);			// ???
-  CLRMSK(DDRT, 0x80);
-  SETMSK(PTT, 0x70);
+  SETMSK(DDRT, 0x70);			// This keeps the accumulator from messing up
+  CLRMSK(DDRT, 0x80);			// Actually lets us read from the optical sensor
+  SETMSK(PTT, 0x70); 			// This keeps the accumulator from messing up
 }
 
 #define ON_OR_OFF(b) ((b) ? " ON" : "OFF")
@@ -437,7 +437,7 @@ void update_display(void) {
   // Update the speed.
   LoadStrLCD("SPEED");
   
-  int_to_ascii(rps/*calc_speed(ccs_enabled ? ccs_rpm : rps*60, 1)*/, buffer, ' ', 4);
+  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rps*60, 1), buffer, ' ', 4);
   LoadStrLCD(buffer);
   
   // Update the CCS.
