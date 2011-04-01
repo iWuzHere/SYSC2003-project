@@ -149,11 +149,9 @@ void toggle_vent(void) {
 #define MIN_TEMPERATURE 100
 #pragma interrupt_handler check_temperature
 void check_temperature(void){
-	//So this only works when i dont chop off the first few bits to make it a 10 bit value..
-	//wth?
-	temperature = ((ATD0DR6))/8 - 5;
-	//printf( "%d\n", (ATD0DR6) & 0x3F );
-	
+
+	temperature = ((ATD0DR6 & 0x03FF))/8 - 5;
+
 	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
 		toggle_heat();
 	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
@@ -372,7 +370,7 @@ void init(void) {
 
   //This sets up the temperature sensor thing
   ATD0CTL2 = 0xFA; // Enables ATD
-  ATD0CTL3 = 0xFF; // Continue conversions
+  ATD0CTL3 = 0x00; // Continue conversions
   ATD0CTL4 = 0x60; // Select 10-bit operation
   						  // Set sample time to 16 ATD clock period
 						  // Set clock prescale to 0
