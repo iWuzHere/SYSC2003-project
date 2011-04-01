@@ -25,11 +25,6 @@ typedef unsigned char boolean;
 #define LCD_LINE_1 	   0x80
 #define LCD_LINE_2 	   0xC0
 
-#define CCS_ADDRESS	   0x8C
-#define HEATER_ADDRESS 0xC2
-#define SPEED_ADDRESS  0x85
-#define TEMP_ADDRESS   0xCC
-
 
 /* lol? ************************************/
 #define _I(off) (*(unsigned int volatile *)(_IO_BASE + off))
@@ -51,24 +46,10 @@ int     rps = 0;
 boolean ccs_enabled = false;
 int     ccs_rpm = 0;
 boolean heat_enabled = false;
-byte    temperature = 22;
+int    temperature = 0;
 boolean vent_enabled = false;
 boolean emergency_stop = false;
 boolean window_going_up;
-
-/*
-LCDs DDRAM
-
- 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D 0E 0F
- S  P  E  E  D  X  X  X     C  C  S  O  F  F
- 
- H  :  O  F  F                 T  :  X  X  C
- C1 C2 C3 C4 C5 C6 C7 C8 C9 CA CB CC CD CE CF
-
-addresses that need to be changed: 0x06, 0x07, 0x08, 0x0D, 0x0E, 0x0F
-				 : 0xC3, 0xC4, 0xC5, 0xCD, 0xCE
-
-*/
 
 /** LCD STUFF ******************************************************/
 //Rough int to ascii function
@@ -149,6 +130,7 @@ void disable_ccs(void) {
 void toggle_heat(void) {
   heat_enabled = !heat_enabled;  /* Toggle the heating condition */
   setLED(RED_LED, heat_enabled); /* Update the red LED. */
+  (heat_enabled) ? SETMSK( PTM, 0x80 ) : CLRMSK( PTM, 0x80 );
 }
 
 void increase_heat(void) {
@@ -165,7 +147,22 @@ void toggle_vent(void) {
   vent_enabled = !vent_enabled;     /* Toggle the vent state */
   setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
 }
-
+/** HEATER CONTROL ****************************************************/
+#define MIN_TEMPERATURE 100
+#pragma interrupt_handler check_temperature
+void check_temperature(void){
+	//So this only works when i dont chop off the first few bits to make it a 10 bit value..
+	//wth?
+	temperature = ((ATD0DR6))/8 - 5;
+	//printf( "%d\n", (ATD0DR6) & 0x3F );
+	
+	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
+		toggle_heat();
+	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
+		toggle_heat();
+	} 
+	
+} 
 /** WINDOW CONTROL ****************************************************/
 #define MOTOR_OUTPUT_MASK 0x60
 #define MOTOR_ENABLE_MASK 0x20
@@ -269,6 +266,10 @@ void clock(void) {
     PACNT = 0;
 	//Stops the motor from slowing down too fast
     if (uptime_seconds % 4 == 0 && rps > MAX_RPS) (PWMDTY7)--;
+  }
+
+  if( ticks % 10 == 0 ) {
+	ATD0CTL5 = 0x86;
   }
   
   TC0 += TC0_TICK_LENGTH; // Prepare for a new tick.
@@ -413,6 +414,15 @@ void init(void) {
   PWMPER7 = 100;
   PWMDTY7 = 0;
   
+  
+  //This sets up the temperature sensor thing
+  ATD0CTL2 = 0xFA; // Enables ATD
+  ATD0CTL3 = 0xFF; // Continue conversions
+  ATD0CTL4 = 0x60; // Select 10-bit operation
+  						  // Set sample time to 16 ATD clock period
+						  // Set clock prescale to 0
+  ATD0CTL5 = 0x86; // Right justified, Unsigned and single scan
+  
   INTR_ON();  
   
   // Set up the LCD.
@@ -461,8 +471,8 @@ void update_display(void) {
   LoadStrLCD(buffer);
   
   // Update the temperature.
-  LoadStrLCD(" T:");
-  int_to_ascii(temperature, buffer, ' ', 3);
+  LoadStrLCD("T:");
+  int_to_ascii(temperature, buffer, ' ', 4);
   LoadStrLCD(buffer);
 }
 
@@ -478,6 +488,8 @@ int main(int argc, char **argv) {
   clearLCD();
   moveLCDCursor(LCD_LINE_1);
   LoadStrLCD("Emergency stop");
+  
+  ATD0CTL2 = 0; // Turn off the ATD
   
   SETMSK(DDRK, 0x20);  /* Enable output to the buzzer. */
   SETMSK(PORTK, 0x20); /* Turn on the buzzer. */

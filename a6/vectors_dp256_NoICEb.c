@@ -22,7 +22,8 @@ extern void _start(void);	/* entry point in crt??.s */
 extern void KISR(void);
 extern void RTI(void);
 extern void clock(void);
-extern void paca_isr(void);
+//extern void paca_isr(void);
+extern void check_temperature(void);
 
 #define NOICE_DUMMY_ENTRY (void (*)(void))0xF8CF
 #define NOICE_XIRQ	(void (*)(void))0xF8C7
@@ -82,7 +83,7 @@ void (*interrupt_vectors[])(void) =
 	KISR, /*Port H Interrupt*/
 	NOICE_DUMMY_ENTRY, /*Port J Interrupt*/
 	NOICE_DUMMY_ENTRY, /*ATD1*/
-	NOICE_DUMMY_ENTRY, /*ATD0*/
+	check_temperature, /*ATD0*/
 	NOICE_DUMMY_ENTRY, /*SCI1*/
 	NOICE_DUMMY_ENTRY, /*SCI0*/
 	NOICE_DUMMY_ENTRY, /*SPI0*/
