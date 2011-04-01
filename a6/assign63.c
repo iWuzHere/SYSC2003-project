@@ -147,7 +147,22 @@ void toggle_vent(void) {
   vent_enabled = !vent_enabled;     /* Toggle the vent state */
   setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
 }
- 
+/** HEATER CONTROL ****************************************************/
+#define MIN_TEMPERATURE 100
+#pragma interrupt_handler check_temperature
+void check_temperature(void){
+	//So this only works when i dont chop off the first few bits to make it a 10 bit value..
+	//wth?
+	temperature = ((ATD0DR6))/8 - 5;
+	//printf( "%d\n", (ATD0DR6) & 0x3F );
+	
+	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
+		toggle_heat();
+	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
+		toggle_heat();
+	} 
+	
+} 
 /** WINDOW CONTROL ****************************************************/
 #define MOTOR_OUTPUT_MASK 0x60
 #define MOTOR_ENABLE_MASK 0x20

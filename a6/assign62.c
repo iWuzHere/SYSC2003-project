@@ -25,7 +25,6 @@ typedef unsigned char boolean;
 #define LCD_LINE_1 	   0x80
 #define LCD_LINE_2 	   0xC0
 
-
 /* lol? ************************************/
 #define _I(off) (*(unsigned int volatile *)(_IO_BASE + off))
 #define PACNT     _I(0x62)
@@ -42,7 +41,7 @@ void moveLCDCursor(byte address);
 void LoadStrLCD( char *s );
 
 /* Global Variables */
-int     rps = 0;
+int     rpm = 0;
 boolean ccs_enabled = false;
 int     ccs_rpm = 0;
 boolean heat_enabled = false;
@@ -88,15 +87,14 @@ void setLED(byte mask, boolean on) {
 }
 
 /** SPEED CONTROL *****************************************************/
-#define MAX_DUTY_CYCLE 30
-#define MIN_DUTY_CYCLE  0
 
 void accelerate(void) {
-  if( (PWMDTY7) < MAX_DUTY_CYCLE) (PWMDTY7)++;
+  rpm++;
 }
 
 void brake(void) {
-  if( (PWMDTY7) > MIN_DUTY_CYCLE) (PWMDTY7)--;
+  if( rpm == 0 ) { return; }
+  rpm--;
 }
 
 /** CRUISE CONTROL ****************************************************/
@@ -105,7 +103,7 @@ void brake(void) {
 void set_ccs(boolean enabled) {
   ccs_enabled = enabled;      /* Update the CCS condition. */
   setLED(GREEN_LED, enabled); /* Update the green LED. */
-  ccs_rpm = rps*60;
+  ccs_rpm = rpm;
 }
 
 void toggle_ccs(void) {
@@ -147,7 +145,22 @@ void toggle_vent(void) {
   vent_enabled = !vent_enabled;     /* Toggle the vent state */
   setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
 }
- 
+/** HEATER CONTROL ****************************************************/
+#define MIN_TEMPERATURE 100
+#pragma interrupt_handler check_temperature
+void check_temperature(void){
+	//So this only works when i dont chop off the first few bits to make it a 10 bit value..
+	//wth?
+	temperature = ((ATD0DR6))/8 - 5;
+	//printf( "%d\n", (ATD0DR6) & 0x3F );
+	
+	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
+		toggle_heat();
+	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
+		toggle_heat();
+	} 
+	
+} 
 /** WINDOW CONTROL ****************************************************/
 #define MOTOR_OUTPUT_MASK 0x60
 #define MOTOR_ENABLE_MASK 0x20
@@ -237,24 +250,13 @@ void RTI(void) {
 #define TC0_TICK_LENGTH 50000
 
 int uptime_seconds = 0;
-int paca_intrs = 0;
 
-#define MAX_RPS 30
 #pragma interrupt_handler clock
 void clock(void) {
   static unsigned int ticks = 0;
   
   if (++ticks % 5 == 0) {
     ++uptime_seconds;
-	
-	rps = PACNT;
-    PACNT = 0;
-	//Stops the motor from slowing down too fast
-    if (uptime_seconds % 4 == 0 && rps > MAX_RPS) (PWMDTY7)--;
-  }
-
-  if( ticks % 10 == 0 ) {
-	ATD0CTL5 = 0x86;
   }
   
   TC0 += TC0_TICK_LENGTH; // Prepare for a new tick.
@@ -367,33 +369,7 @@ void init(void) {
   TIOS  = 0x01;        // Enable OC0.
   SETMSK(TIE, 0x01);   // Enable interrupts on OC0.
   TC0   = TCNT + TC0_TICK_LENGTH; // Set up the timeout on the output compare.
-  
-  
-  // Setup the motor
-  // Output for all channels is high at beginning 
-  // of Period and low when the duty count is reached
-  PWMPOL = 0xFF;
 
-  SETMSK(PWMCLK,0x10);		// Select Clock SB for channel 7
-  PWMPRCLK = 0x70;		// Prescale ClockB by busclock/128
-
-  PWMSCLA = 0;			// Total Divide: EClock/512
-  PWMCAE  = 0xFF;		// Make sure Chan7 is in left aligned output mode
-  PWMCTL  = 0x00;		// Combine PWMs 6 and 7.
-
-  PWME = 0x80;			// Enable PWM Channel 7
-
-  //For Motor Direction Control
-  SETMSK(DDRP,0x60);
-	
-  //Setup Pulse Accumulator A for Optical Sensor Input
-  SETMSK(PAFLG, 0x03);			// Clear out the interrupt flag
-  PACTL  = 0x50;		// Enable PACA
-  
-  PWMPER7 = 100;
-  PWMDTY7 = 0;
-  
-  
   //This sets up the temperature sensor thing
   ATD0CTL2 = 0xFA; // Enables ATD
   ATD0CTL3 = 0xFF; // Continue conversions
@@ -407,10 +383,6 @@ void init(void) {
   // Set up the LCD.
   clearLEDs();
   LCD2PP_Init();
-  	
-  SETMSK(DDRT, 0x70);			// This keeps the accumulator from messing up
-  CLRMSK(DDRT, 0x80);			// Actually lets us read from the optical sensor
-  SETMSK(PTT, 0x70); 			// This keeps the accumulator from messing up
 }
 
 #define ON_OR_OFF(b) ((b) ? " ON" : "OFF")
@@ -426,7 +398,7 @@ void update_display(void) {
   // Update the speed.
   LoadStrLCD("SPEED");
   
-  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rps*60, 1), buffer, ' ', 4);
+  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rpm, 1), buffer, ' ', 4);
   LoadStrLCD(buffer);
   
   // Update the CCS.
