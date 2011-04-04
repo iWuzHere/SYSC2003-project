@@ -16,7 +16,7 @@
  *    This set point is copied from the current RPS when the CCS is enabled, and
  *    can be adjusted with the '4' and '7' keys. The set point is not displayed 
  *    on the the LCD panel. Additionally, each adjustment increases or decreases
- *    by one RPM, up to a maximum of 30RPS.
+ *    by 60 RPMs, up to a maximum of 30RPS.
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -138,12 +138,12 @@ void toggle_ccs(void) {
 
 void increase_ccs(void) {
   if (ccs_rpm >= MAX_RPM) return;
-  ccs_rpm++;
+  ccs_rpm += 60;
 }
 
 void decrease_ccs(void) {
   if (ccs_rpm == 0) return;
-  ccs_rpm--;
+  ccs_rpm -= 60;
 }
 
 void disable_ccs(void) {
