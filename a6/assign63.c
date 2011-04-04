@@ -12,11 +12,11 @@
  *    24 cm.
  * 3. The accelerate / brake keys increase or decrease the duty cycle.
  *    They don't offer the same granularity as the CCS. 
- * 4. Similarly to the heating system, the CCS maintains a target RPS set point.
+ * 4. Similarly to the heating system, the CCS maintains a target RPM set point.
  *    This set point is copied from the current RPS when the CCS is enabled, and
  *    can be adjusted with the '4' and '7' keys. The set point is not displayed 
  *    on the the LCD panel. Additionally, each adjustment increases or decreases
- *    by one RPS, up to a maximum of 30RPS.
+ *    by one RPM, up to a maximum of 30RPS.
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -66,7 +66,7 @@ void LoadStrLCD( char *s );
 /* Global Variables */
 int     rps = 0;
 boolean ccs_enabled = false;
-int     ccs_rps = 0;
+int     ccs_rpm = 0;             // Fulfill silly dictation of representation.
 boolean heat_enabled = false;
 int     target_temperature = 20; // In Celsius.
 int     temperature = 0;
@@ -111,9 +111,9 @@ void setLED(byte mask, boolean on) {
 }
 
 /** SPEED CONTROL *****************************************************/
-#define MAX_DUTY_CYCLE 30
-#define MAX_RPS        30
-#define MIN_DUTY_CYCLE  0
+#define MAX_DUTY_CYCLE   30
+#define MAX_RPM        1800
+#define MIN_DUTY_CYCLE    0
 
 void accelerate(void) {
   if( (PWMDTY7) < MAX_DUTY_CYCLE) (PWMDTY7)++;
@@ -127,8 +127,8 @@ void brake(void) {
 
 
 void set_ccs(boolean enabled) {
-  ccs_enabled = enabled;      /* Update the CCS condition. */
-  ccs_rps     = rps ;         /* Copy the current speed. */
+  ccs_enabled = enabled;       /* Update the CCS condition. */
+  ccs_rpm     = rps * 60;      /* Copy the current speed. */
   setLED(YELLOW_LED, enabled); /* Update the green LED. */
 }
 
@@ -137,13 +137,13 @@ void toggle_ccs(void) {
 }
 
 void increase_ccs(void) {
-  if (ccs_rps >= MAX_RPS) return;
-  ccs_rps++;
+  if (ccs_rpm >= MAX_RPM) return;
+  ccs_rpm++;
 }
 
 void decrease_ccs(void) {
-  if (ccs_rps == 0) return;
-  ccs_rps--;
+  if (ccs_rpm == 0) return;
+  ccs_rpm--;
 }
 
 void disable_ccs(void) {
@@ -280,8 +280,9 @@ void clock(void) {
 	
 	// Only slow every 2 seconds to stop the motor from slowing down too fast
 	if (ccs_enabled) {
-	  if (rps < ccs_rps)                                 (PWMDTY7)++;
-	  else if (uptime_seconds % 2 == 0 && rps > ccs_rps) (PWMDTY7)--;
+	  unsigned rpm = rps * 60;
+	  if (rpm < ccs_rpm)                                 (PWMDTY7)++;
+	  else if (uptime_seconds % 2 == 0 && rpm > ccs_rpm) (PWMDTY7)--;
 	}
   }
 
