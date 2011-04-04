@@ -1,4 +1,23 @@
-//Brendan MacDonell (100777952) And Imran Iqbal (100794182)
+/* Integrated Car Control System
+ *
+ * Brendan MacDonell (100777952) And Imran Iqbal (100794182)
+ *
+ * Interpretation of instructions:
+ * 1. Heating attempts to reach an undisplayed set point, which defaults to
+ *    20 C, when the heat is on; the set point may be adjusted using the '5'
+ *    and '8' keys. The fahrenheit display and _fixed_ set point from assignment
+ *    62 are discarded.
+ * 2. The current car speed is displayed in km / h, based on the value read from
+ *    the pulse accumulator. This speed is based on a presumed wheel radius of
+ *    24 cm.
+ * 3. The accelerate / brake keys increase or decrease the duty cycle.
+ *    They don't offer the same granularity as the CCS. 
+ * 4. Similarly to the heating system, the CCS maintains a target RPS set point.
+ *    This set point is copied from the current RPS when the CCS is enabled, and
+ *    can be adjusted with the '4' and '7' keys. The set point is not displayed 
+ *    on the the LCD panel. Additionally, each adjustment increases or decreases
+ *    by one RPS, up to a maximum of 30RPS.
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include "hcs12dp256.h"
@@ -25,6 +44,9 @@ typedef unsigned char boolean;
 #define LCD_LINE_1 	   0x80
 #define LCD_LINE_2 	   0xC0
 
+#define WHEEL_SIZE  24
+// 2 * PI * 60
+#define PI_2_60    377
 
 /* lol? ************************************/
 #define _I(off) (*(unsigned int volatile *)(_IO_BASE + off))
@@ -44,9 +66,10 @@ void LoadStrLCD( char *s );
 /* Global Variables */
 int     rps = 0;
 boolean ccs_enabled = false;
-int     ccs_rpm = 0;
+int     ccs_rps = 0;
 boolean heat_enabled = false;
-int    temperature = 0;
+int     target_temperature = 20; // In Celsius.
+int     temperature = 0;
 boolean vent_enabled = false;
 boolean emergency_stop = false;
 boolean window_going_up;
@@ -71,7 +94,7 @@ void int_to_ascii(int num, char *s, char padding, int strlen){
 
 /* Rough function to calculate speed ripped from assignment 3; Replace with your own if you need to*/
 unsigned calc_speed(int RPM, int wheelR){
-	return RPM * wheelR * 2 * 3.14 * 60/1000;
+    return ((long)RPM) * PI_2_60 * wheelR / (10000 * 10);
 }
 
 void clearLEDs(void) {
@@ -89,6 +112,7 @@ void setLED(byte mask, boolean on) {
 
 /** SPEED CONTROL *****************************************************/
 #define MAX_DUTY_CYCLE 30
+#define MAX_RPS        30
 #define MIN_DUTY_CYCLE  0
 
 void accelerate(void) {
@@ -104,8 +128,8 @@ void brake(void) {
 
 void set_ccs(boolean enabled) {
   ccs_enabled = enabled;      /* Update the CCS condition. */
+  ccs_rps     = rps ;         /* Copy the current speed. */
   setLED(GREEN_LED, enabled); /* Update the green LED. */
-  ccs_rpm = rps*60;
 }
 
 void toggle_ccs(void) {
@@ -113,12 +137,13 @@ void toggle_ccs(void) {
 }
 
 void increase_ccs(void) {
-  ccs_rpm++;
+  if (ccs_rps >= MAX_RPS) return;
+  ccs_rps++;
 }
 
 void decrease_ccs(void) {
-  if( ccs_rpm == 0 ){ return; }
-  ccs_rpm--;
+  if (ccs_rps == 0) return;
+  ccs_rps--;
 }
 
 void disable_ccs(void) {
@@ -130,17 +155,16 @@ void disable_ccs(void) {
 void toggle_heat(void) {
   heat_enabled = !heat_enabled;  /* Toggle the heating condition */
   setLED(RED_LED, heat_enabled); /* Update the red LED. */
-  (heat_enabled) ? SETMSK( PTM, 0x80 ) : CLRMSK( PTM, 0x80 );
 }
 
 void increase_heat(void) {
-  if( temperature == 99 ){ return; }
-  temperature++;
+  if (target_temperature == 99) return;
+  target_temperature++;
 }
 
 void decrease_heat(void) {
-  if( temperature == 0 ) { return; }
-  temperature--;
+  if (target_temperature == 0) return;
+  target_temperature--;
 }
 
 void toggle_vent(void) {
@@ -148,18 +172,12 @@ void toggle_vent(void) {
   setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
 }
 /** HEATER CONTROL ****************************************************/
-#define MIN_TEMPERATURE 100
 #pragma interrupt_handler check_temperature
 void check_temperature(void){
-
-	temperature = ((ATD0DR6 & 0x03FF))/8 - 5;
+	temperature = (((ATD0DR6 & 0x03FF)) - 296) * 5 / 72;
 	
-	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
-		toggle_heat();
-	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
-		toggle_heat();
-	} 
-	
+	if(temperature <= target_temperature && heat_enabled) SETMSK(PTM, 0x80);
+	else                                                  CLRMSK(PTM, 0x80);
 } 
 /** WINDOW CONTROL ****************************************************/
 #define MOTOR_OUTPUT_MASK 0x60
@@ -219,7 +237,7 @@ void finish(void) {
 }
 
 /** TIMING ISRS *****************************************************/
-unsigned int rti_ticks = 0;
+volatile unsigned int rti_ticks = 0;
 
 void enable_rti(void) {
   SETMSK(CRGINT, 0x80); // Enable the timer.
@@ -242,7 +260,7 @@ void RTI(void) {
   if (rti_ticks == 1500) {
 	disable_rti();
   }
-  
+
   CRGFLG = 0x80;
 }
 
@@ -250,9 +268,7 @@ void RTI(void) {
 #define TC0_TICK_LENGTH 50000
 
 int uptime_seconds = 0;
-int paca_intrs = 0;
 
-#define MAX_RPS 30
 #pragma interrupt_handler clock
 void clock(void) {
   static unsigned int ticks = 0;
@@ -262,8 +278,10 @@ void clock(void) {
 	
 	rps = PACNT;
     PACNT = 0;
-	//Stops the motor from slowing down too fast
-    if (uptime_seconds % 4 == 0 && rps > MAX_RPS) (PWMDTY7)--;
+	
+	// Only slow every 2 seconds to stop the motor from slowing down too fast
+	if (rps < ccs_rps)                                 (PWMDTY7)++;
+	else if (uptime_seconds % 2 == 0 && rps > ccs_rps) (PWMDTY7)--;
   }
 
   if( ticks % 10 == 0 ) {
@@ -381,7 +399,6 @@ void init(void) {
   SETMSK(TIE, 0x01);   // Enable interrupts on OC0.
   TC0   = TCNT + TC0_TICK_LENGTH; // Set up the timeout on the output compare.
   
-  
   // Setup the motor
   // Output for all channels is high at beginning 
   // of Period and low when the duty count is reached
@@ -439,7 +456,7 @@ void update_display(void) {
   // Update the speed.
   LoadStrLCD("SPEED");
   
-  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rps*60, 1), buffer, ' ', 4);
+  int_to_ascii(calc_speed(rps * 60, WHEEL_SIZE), buffer, ' ', 4);
   LoadStrLCD(buffer);
   
   // Update the CCS.
@@ -464,8 +481,9 @@ void update_display(void) {
   
   // Update the temperature.
   LoadStrLCD("T:");
-  int_to_ascii(temperature, buffer, ' ', 4);
+  int_to_ascii(temperature, buffer, ' ', 3);
   LoadStrLCD(buffer);
+  LoadStrLCD("C");
 }
 
 int main(int argc, char **argv) {
@@ -480,6 +498,9 @@ int main(int argc, char **argv) {
   clearLCD();
   moveLCDCursor(LCD_LINE_1);
   LoadStrLCD("Emergency stop");
+  
+  PWMDTY7 = 0; // Stop the car's motor.
+  PWME    = 0;
   
   ATD0CTL2 = 0; // Turn off the ATD
   
