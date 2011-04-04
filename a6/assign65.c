@@ -39,9 +39,19 @@ typedef struct {
 } time_t;
 
 /* Global variables ***************************************************/
-time_t time = { 0, 0 };
-time_t alarm = { 25, 0 };
+#define MAX_DECISECONDS 36000
+#define MAX_HOURS       24
+
+time_t time      = { 0,         0 };
+time_t alarm     = { MAX_HOURS, 0 };
+time_t timer     = { MAX_HOURS, 0 };
+time_t stopwatch = { 0,         0 };
+unsigned end_beep_deciseconds = MAX_DECISECONDS;
+
 int temperature = 0;
+boolean alarm_on = false;
+boolean timer_on = false;
+boolean stopwatch_on = false;
 
 /* Different Mode definitions go here */
 typedef enum {
@@ -87,6 +97,12 @@ int get_celsius( void ){
 	return ((temperature -32) * 5 / 9);
 }
 
+boolean time_equals(time_t *a, time_t *b) {
+  return a->hours == b->hours && a->deci_seconds == b->deci_seconds;
+}
+
+#define BUZZER_MASK 0xFF
+
 /* LED STUFFS    *******************************************************/
 #define RED_LED    0x01
 #define ORANGE_LED 0x02
@@ -105,27 +121,39 @@ void setLED(byte mask, boolean on) {
   if (on) SETMSK(PORTK, mask);
   else    CLRMSK(PORTK, mask);
 }
+
+void error_beep(void) {
+  end_beep_deciseconds = (time.deci_seconds + 15) % MAX_DECISECONDS;
+  SETMSK(PORTK, BUZZER_MASK);
+}
+
 /** Clcok handler thingies ********************************************/
 
 #define LOCK_CLOCK()   CLRMSK(TIE, 0x01) // Disable interrupts on OC0.
 #define UNLOCK_CLOCK() SETMSK(TIE, 0x01) // Enable interrupts on OC0.
 
-/* Handle showing the clock. */
-void show_clock_display( char *a, char *b ){
-	unsigned hrs, ds;
+void write_time(time_t *sometime, char *line) {
+  	unsigned hrs, ds;
 	
 	LOCK_CLOCK();
-	hrs = time.hours;
-	ds = time.deci_seconds;
+	hrs = sometime->hours;
+	ds = sometime->deci_seconds;
 	UNLOCK_CLOCK();
 	
+	int_to_ascii(hrs, line, '0', 3);
+	line[2] = ':';
+	int_to_ascii(ds / 600, line + 3, '0', 3);
+	line[5] = ':';
+	int_to_ascii( (ds % 600) / 10, line + 6, '0', 3);
+	line[8] = ' ';
+}
+
+/* Handle showing the clock. */
+void show_clock_display( char *a, char *b ){
 	strcpy(a, "Press 0 for menu" );
-	int_to_ascii(hrs, b, '0', 3);
-	b[2] = ':';
-	int_to_ascii(ds / 600, b + 3, '0', 3);
-	b[5] = ':';
-	int_to_ascii( (ds % 600) / 10, b + 6, '0', 3);
-	b[8] = ' ';
+	
+	write_time(&time, b);
+	
 	int_to_ascii(temperature, b + 11, ' ', 4);
 	b[14] = ' ';
 	b[15] = 'F';
@@ -135,7 +163,11 @@ void keypress_clock_display(char key) {
   switch (key) {
 	case '0': state = VIEW_MENU;
 	          break;
-	default:  // XXX: Annoying noise.
+    case 'F': alarm_on = false;
+	          timer_on = false;
+	          CLRMSK(PORTK, BUZZER_MASK);
+			  break;
+	default:  error_beep();
 			  break;
   }
 }
@@ -144,40 +176,52 @@ void keypress_clock_display(char key) {
 char set_time_buffer[5] = "";
 unsigned int set_time_position = 0;
 
-void enter_time(char key, time_t *sometime, char *buffer, unsigned *positionptr) {
+void set_time_t(time_t *sometime, char *buffer) {
+  LOCK_CLOCK();
+  sometime->hours = char_to_digit(buffer[0]) * 10 + char_to_digit(buffer[1]);
+  sometime->deci_seconds = char_to_digit(buffer[2]) * 10 + char_to_digit(buffer[3]);  
+  sometime->deci_seconds *= 600;
+  UNLOCK_CLOCK();
+  state = VIEW_CLOCK;
+}
+
+boolean enter_time(char key, time_t *sometime, char *buffer, unsigned *positionptr, boolean validate) {
   unsigned digit = char_to_digit(key);
   unsigned position = *positionptr;
+
+  if (!isdigit(key)) {
+    error_beep(); // Show that the entry is invalid.
+    return false;
+  }
   
-  if (!isdigit(key) ||
-      (position == 0 && digit > 2) ||
-	  (position == 1 && buffer[position-1] == '2' && digit > 3) ||
-	  (digit > 5 && position == 2)) {
-    // TODO: Short beep to show that entry is invalid.
-	return;
+  if (validate) {
+    if ((position == 0 && digit > 2) ||
+	    (position == 1 && buffer[position-1] == '2' && digit > 3) ||
+	    (digit > 5 && position == 2)) {
+      error_beep(); // Show that the entry is invalid.
+      return false;  
+	}
   }
   
   buffer[position++] = key;
   buffer[position] = '\0';
-  *positionptr = position;
-  
-  if (position == 4) { // We're done
-   	LOCK_CLOCK();
-	
-	sometime->hours = char_to_digit(buffer[0]) * 10 + char_to_digit(buffer[1]);
-	sometime->deci_seconds = char_to_digit(buffer[2]) * 10 + char_to_digit(buffer[3]);
-	sometime->deci_seconds *= 600;
-	
-	UNLOCK_CLOCK();
-	
-	state = VIEW_CLOCK;
+
+  if (position == 4) {
+    *positionptr = 0;
+    return true;
+  } else {
+    *positionptr = position;
+    return false;
   }
 }
 
 void keypress_setup(char key) {
-  enter_time(key, &time, set_time_buffer, &set_time_position); 
+  if(enter_time(key, &time, set_time_buffer, &set_time_position, true)) {
+    set_time_t(&time, set_time_buffer);
+  } 
 }
 
-void show_time(const char *prompt, char *a, char *b, char *buffer) {
+void show_time_prompt(const char *prompt, char *a, char *b, char *buffer) {
 	strcpy(a, prompt);
 	strncpy(b, buffer, 2);
 	b[2] = ':';
@@ -185,7 +229,7 @@ void show_time(const char *prompt, char *a, char *b, char *buffer) {
 }
 
 void show_setup( char *a, char *b ){
-	show_time("Enter time HH:MM", a, b, set_time_buffer);
+	show_time_prompt("Enter time HH:MM", a, b, set_time_buffer);
 }
 
 /* Handle alarm entry */
@@ -193,11 +237,13 @@ char set_alarm_buffer[5];
 unsigned set_alarm_position = 0;
 
 void keypress_alarm(char key) {
-  enter_time(key, &alarm, set_alarm_buffer, &set_alarm_position); 
+  if(enter_time(key, &alarm, set_alarm_buffer, &set_alarm_position, true)) {
+    set_time_t(&alarm, set_alarm_buffer);
+  } 
 }
 
 void show_alarm( char *a, char *b ){
-	show_time("Alarm time HH:MM", a, b, set_alarm_buffer);
+	show_time_prompt("Alarm time HH:MM", a, b, set_alarm_buffer);
 }
 
 /* Handle the menu. */
@@ -210,7 +256,7 @@ void keypress_menu(char key) {
 			  break;
 	case '3': state = VIEW_SET_STOPWATCH;
 			  break;
-	default:  // TODO: MAKE BEEPING NOISE.
+	default:  error_beep(); // Show that the entry is invalid.
 			  break;
   }
 }
@@ -220,14 +266,84 @@ void show_menu(char *a, char *b) {
 	strcpy(b, "3:Stopwatch");
 }
 
+/* Handle the timer. */
+char set_timer_buffer[5];
+unsigned set_timer_position = 0;
+
+void keypress_timer(char key) {
+  int minutes, seconds;
+  int ds, hrs;
+  
+  if (enter_time(key, &timer, set_timer_buffer, &set_timer_position, false)) {
+	minutes = char_to_digit(set_timer_buffer[0]) * 10 + char_to_digit(set_timer_buffer[1]);
+	seconds = char_to_digit(set_timer_buffer[2]) * 10 + char_to_digit(set_timer_buffer[3]);
+	
+    LOCK_CLOCK();
+	ds = time.deci_seconds + minutes * 600 + seconds * 10;
+	hrs = time.hours;
+	timer.hours = (hrs + ds / MAX_DECISECONDS) % 24;
+	timer.deci_seconds = ds % MAX_DECISECONDS;
+    UNLOCK_CLOCK();
+	
+	state = VIEW_CLOCK;
+  } 
+}
+
+void show_timer( char *a, char *b ){
+    if (set_timer_position == 0 && timer.hours != MAX_HOURS) {
+	  time_t difference;
+	  
+	  LOCK_CLOCK();
+	  difference.hours = timer.hours - time.hours;
+  	  difference.deci_seconds = timer.deci_seconds - time.deci_seconds;
+	  UNLOCK_CLOCK();
+	  
+	  strcpy(a, "Time left:");
+	
+      write_time(&difference, b);
+      b[8] = '.';
+      int_to_ascii((difference.deci_seconds % 600) % 10, b + 9, ' ', 2);
+	} else {
+      show_time_prompt("New Timer MM:SS", a, b, set_timer_buffer);
+	}
+}
+
+/* Handle stopwatch. */
+void keypress_stopwatch(char key) {
+  switch(key) {
+  case '1': stopwatch_on = true;
+            break;
+  case '2': stopwatch_on = false;
+            break;
+  case '3': stopwatch.hours = 0;
+			stopwatch.deci_seconds = 0;
+			break;
+  default:  error_beep(); // Show that the entry is invalid.
+            break;
+  }
+}
+
+void show_stopwatch( char *a, char *b ){
+	unsigned ds; 
+    strcpy(a, "1:On 2:Off 3:Clr");
+	
+	LOCK_CLOCK();
+	ds = stopwatch.deci_seconds;
+	UNLOCK_CLOCK();
+	
+	write_time(&stopwatch, b);
+	b[8] = '.';
+	int_to_ascii((ds % 600) % 10, b + 9, ' ', 2);
+}
+
 state_handler_t state_handlers[NUM_STATES] = {
     // display,            key_pressed
 	{ show_setup,          keypress_setup }, // Set the clock.
 	{ show_clock_display,  keypress_clock_display }, // View the clock / temperature.
 	{ show_menu,           keypress_menu }, // Show the menu.          
 	{ show_alarm,          keypress_alarm }, // View / set the alarm.
-	{ NULL,                NULL }, // View / set the timer.
-	{ NULL,                NULL }, // View / set the stopwatch.
+	{ show_timer,          keypress_timer }, // View / set the timer.
+	{ show_stopwatch,      keypress_stopwatch }, // View / set the stopwatch.
 };
 
 
@@ -242,8 +358,12 @@ const char keypad_characters[] = { '1', '2', '3', 'A',
 
 #pragma interrupt_handler KISR()
 void KISR(void) {
-  byte ptp = PTP, ptt = PTT, pts = PTS & 0x80;
+  byte ptp, ptt, pts;
   byte row;
+  
+  ptp = PTP;
+  ptt = PTT;
+  pts = PTS & 0x80;
   
   CLRMSK(PTS, 0x80);
   
@@ -272,17 +392,17 @@ void KISR(void) {
 
       /* Check if the given column is _newly_ set. */
       if (is_pressed) {
-        void (*key_handler)(char) = state_handlers[state].key_pressed;
-        char character = keypad_characters[table_index];
-		
-		//putchar(character); // FUUUUUUUUUUUUUUUUUUUUUUUUUU!
-		
+	    char character = keypad_characters[table_index];
+		void (*key_handler)(char) = state_handlers[state].key_pressed;
+
+        /* Return to the main view if 'E' is pressed. */
+        if (character == 'E') {
+		  state = VIEW_CLOCK; // Return to the main view.
+		  continue;           // Don't allow this to fall through into key handlers.
+		}
+		  
         /* Execute the key handler, if one is present. */
         if (key_handler != NULL) key_handler(character);
-		
-		if (character == 'E') { // 'E' is always escape.
-		  state = VIEW_CLOCK;
-		}
       }
     }
   }
@@ -302,13 +422,49 @@ void KISR(void) {
 #define TC0_TICK_LENGTH 25000
 
 #pragma interrupt_handler clock
-void clock(void) {
+void next_hour(time_t *sometime) {
+  if(sometime->deci_seconds % MAX_DECISECONDS == 0 ){
+  	sometime->hours = (sometime->hours + 1) % MAX_HOURS;
+	sometime->deci_seconds = 0;
+  }
+}
 
+void clock(void) {
   ++time.deci_seconds;
-  if(time.deci_seconds % 10 == 0) { ATD0CTL5 = 0x86; } //Check the temp, yo.
-  if(time.deci_seconds % 36000 == 0 ){
-  	time.hours = (time.hours + 1) % 24;
-	time.deci_seconds = 0;
+  next_hour(&time);
+	
+  if (stopwatch_on) {
+    ++stopwatch.deci_seconds;
+	next_hour(&stopwatch);
+  }
+  
+  if(time.deci_seconds % 10 == 0) {
+    ATD0CTL5 = 0x86;  //Check the temp, yo.
+  }
+  
+  // Stop beeping, if necessary.
+  if (time.deci_seconds == end_beep_deciseconds) {
+    end_beep_deciseconds = MAX_DECISECONDS;
+	CLRMSK(PORTK, BUZZER_MASK);
+  }
+  
+  // Activate the alarm beep if appropriate.
+  if (time_equals(&time, &alarm)) alarm_on = true;
+  
+  // Activate the timer beep if necessary.
+  if (time_equals(&time, &timer)) {
+    timer_on = true;
+	timer.hours = MAX_HOURS;
+  }
+  
+  if (alarm_on ) {
+    if (time.deci_seconds % 5 == 0) {
+      TOGGLEMASK(PORTK, BUZZER_MASK);
+	}
+  } if (timer_on) {
+    if (time.deci_seconds % 3) {
+      TOGGLEMASK(PORTK, BUZZER_MASK);
+	}
   }
   
   TC0 += TC0_TICK_LENGTH; // Prepare for a new tick.
@@ -347,6 +503,9 @@ void update_display(void) {
 
 /** INITIALIZATION  ****************************************************/
 void init(void) {
+  // Set up the RTI.
+  RTICTL = 0x17;// Generate an. intr. every 2ms.
+  
   // Set up the KISR.
   DDRP |= 0x0F; // bitset PP0-3 as outputs (rows)
   DDRH &= 0x0F; // bitclear PH4..7 as inputs (columns)
@@ -359,7 +518,7 @@ void init(void) {
   SETMSK(PTM, 0x08); /* Pass through the latch to the keypad. */
   PTP   = 0x0F; // Set scan row(s)
   CLRMSK(PTM, 0x08);
-
+  
   // Set up the clock (TC0) ISR.
   TSCR1 = 0x90;        // Enable TCNT and fast-flags clear.
   TSCR2 = 0x05;        // Set a pre-scale factor of 32x, no overflow interrupts.
