@@ -171,14 +171,13 @@ void toggle_vent(void) {
   vent_enabled = !vent_enabled;     /* Toggle the vent state */
   setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
 }
+
 /** HEATER CONTROL ****************************************************/
 #pragma interrupt_handler check_temperature
 void check_temperature(void){
 	temperature = (((ATD0DR6 & 0x03FF)) - 296) * 5 / 72;
-	
-	if(temperature <= target_temperature && heat_enabled) SETMSK(PTM, 0x80);
-	else                                                  CLRMSK(PTM, 0x80);
-} 
+}
+
 /** WINDOW CONTROL ****************************************************/
 #define MOTOR_OUTPUT_MASK 0x60
 #define MOTOR_ENABLE_MASK 0x20
@@ -237,7 +236,7 @@ void finish(void) {
 }
 
 /** TIMING ISRS *****************************************************/
-volatile unsigned int rti_ticks = 0;
+unsigned int rti_ticks = 0;
 
 void enable_rti(void) {
   SETMSK(CRGINT, 0x80); // Enable the timer.
@@ -492,6 +491,9 @@ int main(int argc, char **argv) {
   /* Query for a keypress until the user kills the program. */
   while(!emergency_stop) {
     update_display();
+	
+	if(temperature <= target_temperature && heat_enabled) SETMSK(PTM, 0x80);
+	else                                                  CLRMSK(PTM, 0x80);
   }
   
   // Display the emergency exit message.
