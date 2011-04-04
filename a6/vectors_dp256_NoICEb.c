@@ -15,7 +15,7 @@
  * In the SCI entry, change:
  *	DUMMY_ENTRY,
  * to
- *  SCIHandler, 
+ *  SCIHandler,
  */
 #pragma nonpaged_function _start
 extern void _start(void);	/* entry point in crt??.s */

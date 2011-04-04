@@ -88,11 +88,12 @@ void setLED(byte mask, boolean on) {
 }
 
 /** SPEED CONTROL *****************************************************/
+#define MAX_RPS 30
 #define MAX_DUTY_CYCLE 30
 #define MIN_DUTY_CYCLE  0
 
 void accelerate(void) {
-  if( (PWMDTY7) < MAX_DUTY_CYCLE) (PWMDTY7)++;
+  if(rps < MAX_RPS && (PWMDTY7) < MAX_DUTY_CYCLE) (PWMDTY7)++;
 }
 
 void brake(void) {
@@ -239,7 +240,6 @@ void RTI(void) {
 int uptime_seconds = 0;
 int paca_intrs = 0;
 
-#define MAX_RPS 30
 #pragma interrupt_handler clock
 void clock(void) {
   static unsigned int ticks = 0;
@@ -250,7 +250,7 @@ void clock(void) {
 	rps = PACNT;
     PACNT = 0;
 	//Stops the motor from slowing down too fast
-    if (uptime_seconds % 4 == 0 && rps > MAX_RPS) (PWMDTY7)--;
+    if (uptime_seconds % 2 == 0 && rps > MAX_RPS) (PWMDTY7)--;
   }
 
   if( ticks % 10 == 0 ) {
@@ -393,15 +393,6 @@ void init(void) {
   PWMPER7 = 100;
   PWMDTY7 = 0;
   
-  
-  //This sets up the temperature sensor thing
-  ATD0CTL2 = 0xFA; // Enables ATD
-  ATD0CTL3 = 0xFF; // Continue conversions
-  ATD0CTL4 = 0x60; // Select 10-bit operation
-  						  // Set sample time to 16 ATD clock period
-						  // Set clock prescale to 0
-  ATD0CTL5 = 0x86; // Right justified, Unsigned and single scan
-  
   INTR_ON();  
   
   // Set up the LCD.
@@ -424,9 +415,9 @@ void update_display(void) {
   moveLCDCursor(LCD_LINE_1);
   
   // Update the speed.
-  LoadStrLCD("SPEED");
+  LoadStrLCD("RPS  ");
   
-  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rps*60, 1), buffer, ' ', 4);
+  int_to_ascii(rps, buffer, ' ', 4);
   LoadStrLCD(buffer);
   
   // Update the CCS.
