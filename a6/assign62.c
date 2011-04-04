@@ -17,435 +17,48 @@ typedef unsigned char boolean;
 #define CLRMSK(var, msk) ((var) &= ~(msk))
 #define TOGGLEMASK(var, msk) ((var) ^= (msk))
 
-#define RED_LED    0x01
-#define ORANGE_LED 0x02
-#define YELLOW_LED 0x04
-#define GREEN_LED  0x08
-
-#define LCD_LINE_1 	   0x80
-#define LCD_LINE_2 	   0xC0
-
-/* lol? ************************************/
-#define _I(off) (*(unsigned int volatile *)(_IO_BASE + off))
-#define PACNT     _I(0x62)
-
-/* XXX: WRITE THIS SUBROUTINE IN ASSEMBLY. */
 void delay(void);
-void LCD2PP_Init(void);
 
-/* Changes the spot you are writing to. */
-void delay50ms(void);
-void clearLCD(void);
-void updateLCD(byte address, char *s);
-void moveLCDCursor(byte address);
-void LoadStrLCD( char *s );
-
-/* Global Variables */
-int     rpm = 0;
-boolean ccs_enabled = false;
-int     ccs_rpm = 0;
+int     temperature  = 0;
 boolean heat_enabled = false;
-int    temperature = 0;
-boolean vent_enabled = false;
-boolean emergency_stop = false;
-boolean window_going_up;
 
-/** LCD STUFF ******************************************************/
-//Rough int to ascii function
-void int_to_ascii(int num, char *s, char padding, int strlen){
-	 s[--strlen] = '\0';
-	 strlen--;
-	 if( num == 0 ){
-	 	 s[strlen--] = '0';
-	 }
-	 for( ; strlen >= 0; strlen-- ){
-	 	 int r = num % 10;
-		 
-		 if (num) s[strlen] = r + '0';
-		 else     s[strlen] = padding;
-		 
-		 num /= 10;
-	 }
-}
-
-/* Rough function to calculate speed ripped from assignment 3; Replace with your own if you need to*/
-unsigned calc_speed(int RPM, int wheelR){
-	return RPM * wheelR * 2 * 3.14 * 60/1000;
-}
-
-void clearLEDs(void) {
-  SETMSK(DDRK, 0x0F);  /* Enable output to the LEDs. */
-  CLRMSK(PORTK, 0x0F); /* Disable all of the LEDs. */
-}
-
-void setLED(byte mask, boolean on) {
-  SETMSK(DDRK, 0x0F); /* Enable output to the LEDs. */
-
-  /* Set the signal to the LEDs appropriately. */
-  if (on) SETMSK(PORTK, mask);
-  else    CLRMSK(PORTK, mask);
-}
-
-/** SPEED CONTROL *****************************************************/
-
-void accelerate(void) {
-  rpm++;
-}
-
-void brake(void) {
-  if( rpm == 0 ) { return; }
-  rpm--;
-}
-
-/** CRUISE CONTROL ****************************************************/
-
-
-void set_ccs(boolean enabled) {
-  ccs_enabled = enabled;      /* Update the CCS condition. */
-  setLED(GREEN_LED, enabled); /* Update the green LED. */
-  ccs_rpm = rpm;
-}
-
-void toggle_ccs(void) {
-  set_ccs(!ccs_enabled);
-}
-
-void increase_ccs(void) {
-  ccs_rpm++;
-}
-
-void decrease_ccs(void) {
-  if( ccs_rpm == 0 ){ return; }
-  ccs_rpm--;
-}
-
-void disable_ccs(void) {
-  set_ccs(false);
-}
+#define MIN_TEMPERATURE 100
 
 /** CLIMATE CONTROL ***************************************************/
-
-void toggle_heat(void) {
-  heat_enabled = !heat_enabled;  /* Toggle the heating condition */
-  setLED(RED_LED, heat_enabled); /* Update the red LED. */
-  (heat_enabled) ? SETMSK( PTM, 0x80 ) : CLRMSK( PTM, 0x80 );
-}
-
-void increase_heat(void) {
-  if( temperature == 99 ){ return; }
-  temperature++;
-}
-
-void decrease_heat(void) {
-  if( temperature == 0 ) { return; }
-  temperature--;
-}
-
-void toggle_vent(void) {
-  vent_enabled = !vent_enabled;     /* Toggle the vent state */
-  setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
-}
-/** HEATER CONTROL ****************************************************/
-#define MIN_TEMPERATURE 100
 #pragma interrupt_handler check_temperature
 void check_temperature(void){
-
-	temperature = ((ATD0DR6 & 0x03FF))/8 - 5;
-
-	if( temperature <= MIN_TEMPERATURE && !heat_enabled){
-		toggle_heat();
-	}else if ( temperature > MIN_TEMPERATURE && heat_enabled ){
-		toggle_heat();
-	} 
-	
-} 
-/** WINDOW CONTROL ****************************************************/
-#define MOTOR_OUTPUT_MASK 0x60
-#define MOTOR_ENABLE_MASK 0x20
-
-static const char stepper_motor_values[] = {
-  0x60, // Up and left.
-  0x40, // Up and right.
-  0x00, // Down and right.
-  0x20  // Down and left.
-};
-
-/* step_motor(int steps, boolean clockwise):                    *
- * Move the stepper motor 'steps' steps in the given direction. */
-void step_motor(boolean clockwise) {
-  static unsigned char step = 0;
-  signed char direction = clockwise ? 1 : -1;
-
-  /* Set the direction and step output. */
-  SETMSK(DDRT, MOTOR_OUTPUT_MASK);
-
-  /* Disable the 7-segment display, and enable the stepper motor. */
-  SETMSK(DDRP, MOTOR_ENABLE_MASK);
-  SETMSK(PTP, MOTOR_ENABLE_MASK);
-
-  /* Set the value of the motor output. */
-  CLRMSK(PTT, MOTOR_OUTPUT_MASK);
-  SETMSK(PTT, stepper_motor_values[step]);
-  
-  /* Update the step we are on. */
-  step = (step + direction) & 0x03;
-}
-
-void enable_rti(void);
-
-void move_window(boolean up) {
-  window_going_up = up;
-  enable_rti();
-}
-
-void raise_window(void) {
-  move_window(true);
-}
-
-void lower_window(void) {
-  move_window(false);
-}
-
-
-/** MISC CONTROL ******************************************************/
-void emergency(void) {
-  emergency_stop = true;
-}
-
-void finish(void) {
-  exit(0);
-}
-
-/** TIMING ISRS *****************************************************/
-unsigned int rti_ticks = 0;
-
-void enable_rti(void) {
-  SETMSK(CRGINT, 0x80); // Enable the timer.
-  rti_ticks = 0;        // 1500 ticks = 3 seconds.
-}
-
-void disable_rti(void) {
-  CLRMSK(CRGINT, 0x80); // Disable the timer.
-  CLRMSK(DDRP, MOTOR_ENABLE_MASK);
-}
-
-#pragma interrupt_handler RTI
-void RTI(void) {
-  ++rti_ticks;
-  
-  if (rti_ticks % 5 == 0) {
-  	 step_motor(window_going_up);
-  }
-  
-  if (rti_ticks == 1500) {
-	disable_rti();
-  }
-  
-  CRGFLG = 0x80;
-}
-
-/** CLOCK FUNCTIONS ****************************************************/
-#define TC0_TICK_LENGTH 50000
-
-int uptime_seconds = 0;
-
-#pragma interrupt_handler clock
-void clock(void) {
-  static unsigned int ticks = 0;
-  
-  if (++ticks % 5 == 0) {
-    ++uptime_seconds;
-  }
-  
-  TC0 += TC0_TICK_LENGTH; // Prepare for a new tick.
-}
-
-/** KEYPAD HANDLERS ***************************************************/
-#define ROWS 4
-#define COLS 4
-
-const char keypad_characters[] = { '1', '2', '3', 'A',
-                                   '4', '5', '6', 'B',
-                                   '7', '8', '9', 'C',
-                                   'E', '0', 'F', 'D' };
-
-typedef void (*keypad_handler_t)(void);
-
-const keypad_handler_t keypad_handlers[] = {
-  toggle_ccs,     /* 1 */
-  toggle_heat,    /* 2 */
-  raise_window,   /* 3 */
-  accelerate,     /* A */
-  increase_ccs,   /* 4 */
-  increase_heat,  /* 5 */
-  lower_window,   /* 6 */
-  brake,          /* B */
-  decrease_ccs,   /* 7 */
-  decrease_heat,  /* 8 */
-  finish,         /* 9 */
-  NULL,           /* C */
-  disable_ccs,    /* E */
-  toggle_vent,    /* 0 */
-  emergency,      /* F */
-  NULL            /* D */
-};
-
-#pragma interrupt_handler KISR()
-void KISR(void) {
-  byte ptp = PTP, ptt = PTT, pts = PTS & 0x80;
-  byte row;
-  
-  CLRMSK(PTS, 0x80);
-  
-  // Ensure we don't update the seven-segment display.
-  PTT = 0;
-
-  /* Ensure that the ports are primed to receive keypresses. */
-  SETMSK(DDRP, 0x0F); /* Set row polling bits (PTP0..3) as outputs. */
-  CLRMSK(DDRH, 0xF0); /* Set column bits (PTH4..7) as inputs. */
-  SPI1CR1 = 0;        /* Disable the serial interface. */
-  
-  /* Probe all of the rows. */
-  for (row = 0; row < ROWS; row++) {
-    byte col, col_mask;
-
-	SETMSK(PTM, 0x08); /* Pass through the latch to the keypad. */
-    PTP = 0x01 << row; /* Query the current keypad row. */
-    CLRMSK(PTM, 0x08); /* Re-enable latching on keypad. */
-
-    col_mask = PTH;    /* Copy the polling result. */
-
-    /* Test all of the columns in the row. */
-    for (col = 0; col < COLS; col++) {
-      byte table_index = row * ROWS + col;
-      boolean is_pressed = col_mask & (0x10 << col);
-
-      /* Check if the given column is _newly_ set. */
-      if (is_pressed) {
-        keypad_handler_t key_handler = keypad_handlers[table_index];
-
-        /* Additional requirement: Display the character entered. */
-        putchar(keypad_characters[table_index]);
-		
-        /* Execute the key handler, if one is present. */
-        if (key_handler != NULL) key_handler();
-      }
-    }
-  }
-  
-  SETMSK(PTM, 0x08);
-  PTP = 0x0F;  // Restore scan row(s)
-  CLRMSK(PTM, 0x08);
-  
-  PTP = ptp;   // Restore the value on Port P.  
-  PTT = ptt;
-  PIFH = PIFH;
-  
-  SETMSK(PTS, pts);
+  temperature = ((ATD0DR6 & 0x03FF))/8 - 5;
 }
 
 void init(void) {
-  // Set up the RTI.
-  RTICTL = 0x17;// Generate an. intr. every 2ms.
-  
-  // Set up the KISR.
-  DDRP |= 0x0F; // bitset PP0-3 as outputs (rows)
-  DDRH &= 0x0F; // bitclear PH4..7 as inputs (columns)
+  SETMSK(DDRM, 0x80);
 
-  PIFH  = 0xFF; // Clear previous interrupt flags
-  PPSH  = 0xF0; // Rising Edge
-  PERH  = 0x00; // Disable pulldowns
-  PIEH |= 0xF0; // Local enable on columns inputs
-
-  SETMSK(PTM, 0x08); /* Pass through the latch to the keypad. */
-  PTP   = 0x0F; // Set scan row(s)
-  CLRMSK(PTM, 0x08);
-
-  // Set up the clock (TC0) ISR.
-  TSCR1 = 0x90;        // Enable TCNT and fast-flags clear.
-  TSCR2 = 0x05;        // Set a pre-scale factor of 32x, no overflow interrupts.
-  TIOS  = 0x01;        // Enable OC0.
-  SETMSK(TIE, 0x01);   // Enable interrupts on OC0.
-  TC0   = TCNT + TC0_TICK_LENGTH; // Set up the timeout on the output compare.
-
-  //This sets up the temperature sensor thing
+  // This sets up the temperature sensor thing
   ATD0CTL2 = 0xFA; // Enables ATD
   ATD0CTL3 = 0x00; // Continue conversions
   ATD0CTL4 = 0x60; // Select 10-bit operation
-  						  // Set sample time to 16 ATD clock period
+  						  // Set sample time to 18 ATD clock period
 						  // Set clock prescale to 0
   ATD0CTL5 = 0x86; // Right justified, Unsigned and single scan
   
   INTR_ON();  
-  
-  // Set up the LCD.
-  clearLEDs();
-  LCD2PP_Init();
-}
-
-#define ON_OR_OFF(b) ((b) ? " ON" : "OFF")
-
-void update_display(void) {
-  char buffer[6];
-  const unsigned int seconds = uptime_seconds; // Ensure we have a consistent copy
-                                               // of uptime_seconds (ex. it could
-										       // change between the two conversions.)
-											   
-  moveLCDCursor(LCD_LINE_1);
-  
-  // Update the speed.
-  LoadStrLCD("SPEED");
-  
-  int_to_ascii(calc_speed(ccs_enabled ? ccs_rpm : rpm, 1), buffer, ' ', 4);
-  LoadStrLCD(buffer);
-  
-  // Update the CCS.
-  LoadStrLCD(" CCS:");
-  LoadStrLCD(ON_OR_OFF(ccs_enabled));
-  
-  moveLCDCursor(LCD_LINE_2);
-  
-  // Update the heat display.
-  LoadStrLCD("H:");
-  LoadStrLCD(ON_OR_OFF(heat_enabled));
-  LoadStrLCD(" ");
-  
-  // Update the clock.
-  int_to_ascii(seconds / 60, buffer, '0', 3);
-  LoadStrLCD(buffer);
-	
-  LoadStrLCD(":");
-	
-  int_to_ascii(seconds % 60, buffer, '0', 3);
-  LoadStrLCD(buffer);
-  
-  // Update the temperature.
-  LoadStrLCD("T:");
-  int_to_ascii(temperature, buffer, ' ', 4);
-  LoadStrLCD(buffer);
 }
 
 int main(int argc, char **argv) {
   init();
     
   /* Query for a keypress until the user kills the program. */
-  while(!emergency_stop) {
-    update_display();
+  while (true) {
+	// Enable another pass on the ATD.
+	ATD0CTL5 = 0x86;
+	
+    while (!(ATD0STAT1 & 0x40)) ; // Wait for the conversion to complete.
+	
+	// Print the temperature.
+    printf("%d F\n", temperature);
+    if(temperature <= MIN_TEMPERATURE)      SETMSK(PTM, 0x80);
+	else if (temperature > MIN_TEMPERATURE) CLRMSK(PTM, 0x80);
   }
-  
-  // Display the emergency exit message.
-  clearLCD();
-  moveLCDCursor(LCD_LINE_1);
-  LoadStrLCD("Emergency stop");
-  
-  ATD0CTL2 = 0; // Turn off the ATD
-  
-  SETMSK(DDRK, 0x20);  /* Enable output to the buzzer. */
-  SETMSK(PORTK, 0x20); /* Turn on the buzzer. */
-
-  delay();             /* Delay for ~1 second. */
-
-  CLRMSK(PORTK, 0x20); /* Turn off the buzzer. */
 
   return 0; /* Satisfy the compiler. */
 }
