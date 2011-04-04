@@ -19,9 +19,6 @@
  */
 #pragma nonpaged_function _start
 extern void _start(void);	/* entry point in crt??.s */
-extern void KISR(void);
-extern void RTI(void);
-extern void clock(void);
 extern void check_temperature(void);
 
 #define NOICE_DUMMY_ENTRY (void (*)(void))0xF8CF
@@ -79,7 +76,7 @@ void (*interrupt_vectors[])(void) =
 	NOICE_DUMMY_ENTRY, /*CRG Lock*/
 	NOICE_DUMMY_ENTRY, /*Pulse Accumulator B Overflow*/
 	NOICE_DUMMY_ENTRY, /*Modulus Down Counter Underflow*/
-	KISR, /*Port H Interrupt*/
+	NOICE_DUMMY_ENTRY, /*Port H Interrupt*/
 	NOICE_DUMMY_ENTRY, /*Port J Interrupt*/
 	NOICE_DUMMY_ENTRY, /*ATD1*/
 	check_temperature, /*ATD0*/
@@ -96,8 +93,8 @@ void (*interrupt_vectors[])(void) =
 	NOICE_DUMMY_ENTRY, /*Timer Channel 3*/
 	NOICE_DUMMY_ENTRY, /*Timer Channel 2*/
 	NOICE_DUMMY_ENTRY, /*Timer Channel 1*/
-	clock, /*Timer Channel 0*/
-	RTI, /*Real Time Interrupt*/
+	NOICE_DUMMY_ENTRY, /*Timer Channel 0*/
+	NOICE_DUMMY_ENTRY, /*Real Time Interrupt*/
 	NOICE_DUMMY_ENTRY, /*IRQ*/
 	NOICE_XIRQ, /*XIRQ*/
 	NOICE_SWI, /*SWI*/

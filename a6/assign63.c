@@ -129,7 +129,7 @@ void brake(void) {
 void set_ccs(boolean enabled) {
   ccs_enabled = enabled;      /* Update the CCS condition. */
   ccs_rps     = rps ;         /* Copy the current speed. */
-  setLED(GREEN_LED, enabled); /* Update the green LED. */
+  setLED(YELLOW_LED, enabled); /* Update the green LED. */
 }
 
 void toggle_ccs(void) {
@@ -169,7 +169,7 @@ void decrease_heat(void) {
 
 void toggle_vent(void) {
   vent_enabled = !vent_enabled;     /* Toggle the vent state */
-  setLED(YELLOW_LED, vent_enabled); /* Update the yellow LED. */
+  setLED(GREEN_LED, vent_enabled); /* Update the yellow LED. */
 }
 
 /** HEATER CONTROL ****************************************************/
@@ -279,10 +279,14 @@ void clock(void) {
     PACNT = 0;
 	
 	// Only slow every 2 seconds to stop the motor from slowing down too fast
-	if (rps < ccs_rps)                                 (PWMDTY7)++;
-	else if (uptime_seconds % 2 == 0 && rps > ccs_rps) (PWMDTY7)--;
+	if (ccs_enabled) {
+	  if (rps < ccs_rps)                                 (PWMDTY7)++;
+	  else if (uptime_seconds % 2 == 0 && rps > ccs_rps) (PWMDTY7)--;
+	}
   }
 
+  // Only read from the temperature every two seconds, to minimize
+  // the number of interrupts produced.
   if( ticks % 10 == 0 ) {
 	ATD0CTL5 = 0x86;
   }
@@ -422,6 +426,8 @@ void init(void) {
   PWMPER7 = 100;
   PWMDTY7 = 0;
   
+  // Allow the heater to work?
+  SETMSK(DDRM, 0x80);
   
   //This sets up the temperature sensor thing
   ATD0CTL2 = 0xFA; // Enables ATD
