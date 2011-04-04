@@ -101,7 +101,7 @@ boolean time_equals(time_t *a, time_t *b) {
   return a->hours == b->hours && a->deci_seconds == b->deci_seconds;
 }
 
-#define BUZZER_MASK 0xFF
+#define BUZZER_MASK 0x20
 
 /* LED STUFFS    *******************************************************/
 #define RED_LED    0x01
@@ -477,7 +477,6 @@ void check_temperature(void){
 }
 
 /** GENERIC DISPLAY ****************************************************/
-#define EMPTY_STRING16 "                "
 
 void display_line(byte address, char *line) {
   unsigned last = strlen(line);
@@ -488,11 +487,18 @@ void display_line(byte address, char *line) {
   LoadStrLCD(line);
 }
 
+void clear_line(char *line) {
+  memset(line, ' ', 16);
+  line[16] = '\0';
+}
+
 void update_display(void) {
-  char line_1[16] = EMPTY_STRING16;
-  char line_2[16] = EMPTY_STRING16;
-  
   void (*display_handler)(char*,char*) = state_handlers[state].display;
+  char line_1[17];
+  char line_2[17];
+  
+  clear_line(line_1);
+  clear_line(line_2);
   
   if (display_handler == NULL) return;
   
@@ -505,6 +511,9 @@ void update_display(void) {
 void init(void) {
   // Set up the RTI.
   RTICTL = 0x17;// Generate an. intr. every 2ms.
+  
+  // Set up the buzzer.
+  SETMSK(DDRK, BUZZER_MASK);
   
   // Set up the KISR.
   DDRP |= 0x0F; // bitset PP0-3 as outputs (rows)
