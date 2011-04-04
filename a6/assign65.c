@@ -1,4 +1,23 @@
-//Brendan MacDonell (100777952) And Imran Iqbal (100794182)
+/* BONUS PROJECTL DIGITAL CLOCK
+ *
+ * Brendan MacDonell (100777952) And Imran Iqbal (100794182)
+ * 
+ * Instructions:
+ * 1. Enter time on start-up as HH:MM using the keypad.
+ * 2. Program alarms and timers through menus (accessed from 0 in the main menu.)
+ *    (Keys are prompted on the top of the LCD in all modes.)
+ * 3. NOTE: A short tone will sound if a key is pressed which the current view
+ *    cannot handle.
+ * 4. Use 'E' to return to the main screen from any view, or 'F' to disable
+ *    any alarms which are currently sounding.
+ *
+ * Issues:
+ * 1. Excessive key bounces occur, but there is insufficient time to remedy this.
+ * 2. The source code is disorganized: attempts have been made to group code
+ *    by function, but this has been made more difficult by the requirement to
+ *    force all code into a single source file.
+ */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include "hcs12dp256.h"
@@ -123,8 +142,14 @@ void setLED(byte mask, boolean on) {
 }
 
 void error_beep(void) {
-  end_beep_deciseconds = (time.deci_seconds + 15) % MAX_DECISECONDS;
+  end_beep_deciseconds = (time.deci_seconds + 5) % MAX_DECISECONDS;
   SETMSK(PORTK, BUZZER_MASK);
+}
+
+void disable_all_alarms(void) {
+  alarm_on = false;
+  timer_on = false;
+  CLRMSK(PORTK, BUZZER_MASK);
 }
 
 /** Clcok handler thingies ********************************************/
@@ -163,10 +188,6 @@ void keypress_clock_display(char key) {
   switch (key) {
 	case '0': state = VIEW_MENU;
 	          break;
-    case 'F': alarm_on = false;
-	          timer_on = false;
-	          CLRMSK(PORTK, BUZZER_MASK);
-			  break;
 	default:  error_beep();
 			  break;
   }
@@ -228,6 +249,11 @@ void show_time_prompt(const char *prompt, char *a, char *b, char *buffer) {
 	if (strlen(buffer) > 2) strncpy(b+3, buffer+2, 2);
 }
 
+void clear_time_prompt(char *buffer) {
+  unsigned i;
+  for (i = 0; i < 6; i++) buffer[i] = '\0';
+}
+
 void show_setup( char *a, char *b ){
 	show_time_prompt("Enter time HH:MM", a, b, set_time_buffer);
 }
@@ -249,12 +275,12 @@ void show_alarm( char *a, char *b ){
 /* Handle the menu. */
 void keypress_menu(char key) {
   switch(key) {
-    case '1': state = VIEW_SET_ALARM;
+    case 'A': state = VIEW_SET_ALARM;
 			  set_alarm_position = 0;
 	          break;
-	case '2': state = VIEW_SET_TIMER;
+	case 'B': state = VIEW_SET_TIMER;
 			  break;
-	case '3': state = VIEW_SET_STOPWATCH;
+	case 'C': state = VIEW_SET_STOPWATCH;
 			  break;
 	default:  error_beep(); // Show that the entry is invalid.
 			  break;
@@ -262,8 +288,8 @@ void keypress_menu(char key) {
 }
 
 void show_menu(char *a, char *b) {
-	strcpy(a, "1:Alarm 2:Timer");
-	strcpy(b, "3:Stopwatch");
+	strcpy(a, "A:Alarm B:Timer");
+	strcpy(b, "C:Stopwatch");
 }
 
 /* Handle the timer. */
@@ -285,7 +311,7 @@ void keypress_timer(char key) {
 	timer.deci_seconds = ds % MAX_DECISECONDS;
     UNLOCK_CLOCK();
 	
-	state = VIEW_CLOCK;
+	clear_time_prompt(set_timer_buffer);
   } 
 }
 
@@ -399,6 +425,9 @@ void KISR(void) {
         if (character == 'E') {
 		  state = VIEW_CLOCK; // Return to the main view.
 		  continue;           // Don't allow this to fall through into key handlers.
+		} else if (character == 'F') { // Global alarm disable.
+		  disable_all_alarms();
+		  continue;
 		}
 		  
         /* Execute the key handler, if one is present. */
